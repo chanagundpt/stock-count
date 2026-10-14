@@ -427,7 +427,7 @@ function renderHeader(){
   if (S.ready && (!r || r.status !== 'open') && S.view === 'count')
     n.append(h('div', { class: 'notice' }, 'ตอนนี้ไม่มีรอบนับที่เปิดอยู่', h('div', {}, h('button', { class: 'ghost', type: 'button', onclick: () => setView('rounds'), text: 'ไปเปิดรอบนับ' }))));
   $('#save').disabled = !S.ready || !r || r.status !== 'open';
-  $('#sync').textContent = S.syncedAt ? `สินค้าในฐานข้อมูล ${num(S.products.length)} รายการ · อัปเดต ${new Date(S.syncedAt).toLocaleTimeString('th-TH')}` : '';
+  $('#sync').textContent = S.syncedAt ? `สินค้าในฐานข้อมูล ${num(S.products.length)} รายการ · อัปเดต ${new Date(S.syncedAt).toLocaleTimeString('th-TH')}` + (S.version ? ` · เซิร์ฟเวอร์ ${S.version}` : '') : '';
 }
 
 // ---------- count: find & select product ----------
@@ -929,7 +929,7 @@ async function boot(){
   render();
   try {
     const init = await run('getInit');
-    S.pinRequired = init.pinRequired;
+    S.pinRequired = init.pinRequired; S.version = init.version || 'เก่า';
     setProducts(init.products);
   } catch (e) { S.error = 'โหลดฐานข้อมูลสินค้าไม่ได้: ' + e.message; }
   await refresh();
