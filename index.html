@@ -133,6 +133,9 @@ body.typing .wrap{padding-bottom:60vh}
 .who{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted)}
 .who b{color:var(--ink);font-size:15px}
 .who button{margin-left:auto}
+.dlg{position:fixed;inset:0;z-index:40;background:rgb(0 0 0 / .5);display:flex;align-items:center;justify-content:center;padding:16px}
+.dlg .card{width:100%;max-width:360px;gap:8px}
+.dlg input[type=password]{width:100%;font:inherit;font-size:18px;padding:11px 12px;border:1.5px solid var(--line);border-radius:var(--r);background:var(--bg);color:var(--ink)}
 .scanner{position:fixed;inset:0;z-index:50;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:16px}
 .scanbox{position:relative;width:100%;max-width:640px;border-radius:12px;overflow:hidden;background:#111}
 .scanbox video{display:block;width:100%;height:auto}
@@ -238,8 +241,8 @@ body.typing .wrap{padding-bottom:60vh}
         <label for="rname">เปิดรอบนับใหม่</label>
         <input id="rname" type="text" placeholder="เช่น นับสต๊อกสิ้นเดือน ต.ค. 2026">
       </div>
-      <button class="primary" type="submit" id="rcreate">เปิดรอบนับ</button>
-      <p class="hint">ทุกคนนับในรอบเดียวกัน ยอดจะรวมให้อัตโนมัติ เมื่อนับเสร็จให้ปิดรอบ จะไม่มีใครบันทึกเพิ่มได้</p>
+      <button class="primary" type="submit" id="rcreate">🔒 เปิดรอบนับ</button>
+      <p class="hint">ทุกคนนับในรอบเดียวกัน ยอดจะรวมให้อัตโนมัติ เมื่อนับเสร็จให้ปิดรอบ จะไม่มีใครบันทึกเพิ่มได้ · การเปิด/ปิดรอบต้องใช้รหัสผู้ดูแล</p>
     </form>
     <h2>รอบนับทั้งหมด</h2>
     <div id="roundList"></div>
@@ -247,6 +250,22 @@ body.typing .wrap{padding-bottom:60vh}
 </div>
 
 <div id="toast" hidden></div>
+
+<div id="adminDlg" class="dlg" hidden role="dialog" aria-modal="true" aria-labelledby="adminTitle">
+  <form id="adminForm" class="card" autocomplete="off">
+    <b id="adminTitle"></b>
+    <p id="adminNote" class="hint"></p>
+    <div class="field">
+      <label for="adminPw">รหัสผู้ดูแล</label>
+      <input id="adminPw" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done">
+    </div>
+    <p id="adminMsg" class="hint bad"></p>
+    <div class="row" style="justify-content:flex-end">
+      <button type="button" class="ghost" id="adminCancel">ยกเลิก</button>
+      <button type="submit" class="ghost" style="background:var(--accent);color:var(--accent-ink);border-color:var(--accent)">ยืนยัน</button>
+    </div>
+  </form>
+</div>
 
 <div id="scanner" class="scanner" hidden role="dialog" aria-label="สแกนบาร์โค้ด">
   <div class="scanbox" id="scanBox"><video id="scanVideo" playsinline muted></video><div class="laser"></div></div>
@@ -751,6 +770,7 @@ $('#countForm').addEventListener('submit', async e => {
 function errMsg(e){
   const m = (e && e.message) || '';
   if (m === 'PIN_INVALID') { S.pin = ''; lsSet('tmws.pin', ''); renderHeader(); return 'รหัสทีมไม่ถูกต้อง ใส่ใหม่ด้านบน'; }
+  if (m === 'ADMIN_INVALID') return 'รหัสผู้ดูแลไม่ถูกต้อง ทำรายการไม่สำเร็จ';
   return m || 'เชื่อมต่อไม่ได้ ลองอีกครั้ง';
 }
 
@@ -836,9 +856,11 @@ $('#rname').placeholder = 'เช่น ' + defaultRoundName();
 $('#roundForm').addEventListener('submit', async e => {
   e.preventDefault();
   const name = $('#rname').value.trim() || defaultRoundName();
+  const code = await askAdmin('เปิดรอบนับ "' + name + '"', 'ทีมจะเริ่มบันทึกการนับในรอบนี้ได้');
+  if (code === null) return;
   $('#rcreate').disabled = true;
   try {
-    const id = await run('createRound', name, myName(), S.pin);
+    const id = await run('createRound', name, myName(), S.pin, code);
     $('#rname').value = ''; S.roundId = id; lsSet('tmws.round', id);
     await refresh(); toast('เปิดรอบ "' + name + '" แล้ว'); setView('count');
   } catch (err) { toast(errMsg(err)); }
@@ -849,7 +871,7 @@ function renderRounds(){
   if (!S.rounds.length) { box.append(h('div', { class: 'empty', text: S.ready ? 'ยังไม่มีรอบนับ เปิดรอบแรกด้านบน แล้วให้ทีมเปิดลิงก์นี้บนมือถือเพื่อนับพร้อมกัน' : 'กำลังโหลด…' })); return; }
   const list = h('div', { class: 'list' });
   for (const r of S.rounds) {
-    const cur = r.id === S.roundId, armed = S.armed === 'r:' + r.id;
+    const cur = r.id === S.roundId;
     list.append(h('div', { class: 'item' },
       h('div', { class: 'main' },
         h('div', { class: 't1' }, h('b', { text: r.name }), h('span', { class: 'pill ' + (r.status === 'open' ? 'ok' : 'none'), text: r.status === 'open' ? 'กำลังนับ' : 'ปิดแล้ว' }), cur ? h('span', { class: 'pill warn', text: 'กำลังดู' }) : null),
@@ -857,16 +879,30 @@ function renderRounds(){
       h('div', { class: 'row', style: 'flex-wrap:wrap;justify-content:flex-end' },
         !cur ? h('button', { type: 'button', class: 'ghost', text: 'ดูรอบนี้', onclick: () => selectRound(r.id) }) : null,
         r.status === 'open'
-          ? h('button', { type: 'button', class: 'ghost' + (armed ? ' danger' : ''), text: armed ? 'ยืนยันปิดรอบ' : 'ปิดรอบ', onclick: () => setStatus(r, 'closed') })
-          : h('button', { type: 'button', class: 'ghost', text: 'เปิดอีกครั้ง', onclick: () => setStatus(r, 'open') }))));
+          ? h('button', { type: 'button', class: 'ghost danger', text: '🔒 ปิดรอบ', onclick: () => setStatus(r, 'closed') })
+          : h('button', { type: 'button', class: 'ghost', text: '🔒 เปิดอีกครั้ง', onclick: () => setStatus(r, 'open') }))));
   }
   box.append(list);
 }
 async function setStatus(r, status){
-  const k = 'r:' + r.id;
-  if (status === 'closed' && S.armed !== k) { S.armed = k; renderRounds(); setTimeout(() => { if (S.armed === k) { S.armed = null; renderRounds(); } }, 4000); return; }
-  S.armed = null;
-  try { await run('setRoundStatus', r.id, status, S.pin); await refresh(); toast(status === 'closed' ? 'ปิดรอบแล้ว' : 'เปิดรอบอีกครั้งแล้ว'); } catch (e) { toast(errMsg(e)); }
+  const closing = status === 'closed';
+  const code = await askAdmin(closing ? 'ปิดรอบ "' + r.name + '"' : 'เปิดรอบ "' + r.name + '" อีกครั้ง',
+    closing ? 'ปิดแล้วทีมจะบันทึกเพิ่มในรอบนี้ไม่ได้' : 'ทีมจะกลับมาบันทึกในรอบนี้ได้');
+  if (code === null) return;
+  try { await run('setRoundStatus', r.id, status, S.pin, code); await refresh(); toast(closing ? 'ปิดรอบแล้ว' : 'เปิดรอบอีกครั้งแล้ว'); } catch (e) { toast(errMsg(e)); }
+}
+
+// opening/closing a round needs the supervisor password; it is checked on the server, never stored on the phone
+function askAdmin(title, note){
+  return new Promise(resolve => {
+    const dlg = $('#adminDlg'), inp = $('#adminPw'), msg = $('#adminMsg');
+    $('#adminTitle').textContent = title; $('#adminNote').textContent = note || '';
+    inp.value = ''; msg.textContent = ''; dlg.hidden = false;
+    setTimeout(() => inp.focus(), 50);
+    const done = v => { dlg.hidden = true; $('#adminForm').onsubmit = null; $('#adminCancel').onclick = null; resolve(v); };
+    $('#adminForm').onsubmit = e => { e.preventDefault(); const v = inp.value.trim(); if (!v) { msg.textContent = 'ใส่รหัสผู้ดูแล'; return; } done(v); };
+    $('#adminCancel').onclick = () => done(null);
+  });
 }
 function selectRound(id){ S.roundId = id; lsSet('tmws.round', id); S.counts = []; S.open.clear(); render(); refresh(); }
 
