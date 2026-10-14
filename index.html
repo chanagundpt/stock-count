@@ -2,6 +2,12 @@
 <html lang="th">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#0a6a8c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="2nk Stock">
+<title>2nk Stock count</title>
 <base target="_top">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -25,6 +31,7 @@
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{margin:0}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;padding-top:env(safe-area-inset-top,0px)}
 .wrap{max-width:640px;margin:0 auto;padding-inline:16px;padding-block:0 calc(88px + env(safe-area-inset-bottom,0px))}
 header.top{position:sticky;top:0;z-index:5;background:var(--bg);padding-block:12px 10px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);margin-bottom:14px}
@@ -45,7 +52,7 @@ form#countForm{display:flex;flex-direction:column;gap:14px;background:var(--surf
 form#countForm input{background:var(--bg)}
 .row{display:flex;gap:8px;align-items:stretch}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-@media (max-width:420px){.grid2{grid-template-columns:1fr}}
+@media (max-width:420px){.grid2:not(.keep){grid-template-columns:1fr}.grid2.keep{gap:8px}.grid2.keep .stepper{grid-template-columns:40px 1fr 40px;gap:4px}.grid2.keep input.big{font-size:18px;padding:12px 6px}}
 .iconbtn{flex:none;display:grid;place-items:center;width:52px;border-radius:var(--r);background:var(--accent);color:var(--accent-ink);cursor:pointer}
 .iconbtn svg{width:24px;height:24px}
 .stepper{display:grid;grid-template-columns:48px 1fr 48px;gap:6px}
@@ -178,7 +185,7 @@ body.typing .wrap{padding-bottom:60vh}
         <label for="pname">ชื่อสินค้า (สินค้าที่ยังไม่มีในระบบ ใส่ครั้งเดียว)</label>
         <input id="pname" type="text" placeholder="เช่น Sunscreen SPF50 50ml">
       </div>
-      <div class="grid2">
+      <div class="grid2 keep">
         <div class="field">
           <label for="qty">จำนวนที่นับได้ (ชิ้น)</label>
           <div class="stepper">
@@ -515,7 +522,7 @@ function updateExpMsg(){
   inp.disabled = $('#noexp').checked;
   if ($('#noexp').checked) { m.className = 'hint'; m.textContent = 'บันทึกเป็น ไม่มี EXP'; inp.classList.remove('err'); return; }
   const p = parseExp(inp.value);
-  if (!inp.value.trim()) { m.className = 'hint'; m.textContent = 'พิมพ์ตัวเลข 8 หลัก วัน-เดือน-ปี เช่น 15032027'; inp.classList.remove('err'); return; }
+  if (!inp.value.trim()) { m.className = 'hint'; m.textContent = 'พิมพ์ 8 หลัก เช่น 15032027'; inp.classList.remove('err'); return; }
   if (p.partial) { m.className = 'hint'; m.textContent = 'พิมพ์ให้ครบ DD/MM/YYYY'; inp.classList.remove('err'); return; }
   if (!p.ok) { m.className = 'hint bad'; m.textContent = 'วันที่ไม่ถูกต้อง ตรวจวัน/เดือนอีกครั้ง'; inp.classList.add('err'); return; }
   inp.classList.remove('err');
