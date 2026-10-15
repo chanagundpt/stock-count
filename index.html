@@ -919,6 +919,7 @@ async function jstSearchNow(){
     Object.assign(J, { q, by: r.by, total: r.total, at: r.at, rows: r.rows, open: r.rows.length === 1 ? r.rows[0].sku : '' });
     r.rows.forEach(x => { J.seen.delete(x.sku); J.seen.set(x.sku, Object.assign({}, x, { at: r.at })); });
     saveSeen();
+    $('#jstQ').value = ''; // ready for the next item; the searched text stays in the result line
     try { navigator.vibrate && navigator.vibrate(40); } catch {}
   } catch (e) {
     const m = (e && e.message) || '';
