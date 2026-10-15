@@ -129,7 +129,7 @@ tr.void td{text-decoration:line-through;color:var(--muted)}
 .notice{padding:10px 12px;border-radius:8px;background:var(--warn-soft);color:var(--ink);font-size:14px;margin-bottom:12px;display:flex;flex-direction:column;gap:8px}
 .sync{font-size:12px;color:var(--muted);text-align:right;margin:-6px 0 8px}
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:10;background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom,0px)}
-nav.tabs .in{display:grid;grid-template-columns:repeat(3,1fr);width:100%;max-width:640px}
+nav.tabs .in{display:grid;grid-template-columns:repeat(4,1fr);width:100%;max-width:640px}
 nav.tabs button{font:inherit;font-size:13px;font-weight:600;border:0;background:transparent;color:var(--muted);padding:9px 4px 11px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer}
 nav.tabs button svg{width:22px;height:22px}
 nav.tabs button[aria-current=page]{color:var(--accent)}
@@ -141,6 +141,19 @@ body.typing .wrap{padding-bottom:60vh}
 .who{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted)}
 .who b{color:var(--ink);font-size:15px}
 .who button{margin-left:auto}
+.jst-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.jst-card .pname{font-weight:600;font-size:16px}
+.jst-card .meta{font-size:12px;color:var(--muted);font-family:var(--f-mono);overflow-wrap:anywhere}
+.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.metric{background:var(--bg);border-radius:8px;padding:6px 8px;min-width:0}
+.metric .l{font-size:11px;color:var(--muted)}
+.metric .v{font-family:var(--f-mono);font-size:20px;font-weight:600}
+.metric.warn{background:var(--warn-soft)} .metric.warn .l,.metric.warn .v{color:var(--warn)}
+.metric.ok{background:var(--ok-soft)} .metric.ok .l,.metric.ok .v{color:var(--ok)}
+.jst-more{font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 12px}
+.jst-row{all:unset;box-sizing:border-box;display:flex;gap:10px;align-items:center;width:100%;padding:10px 14px;border-top:1px solid var(--line);cursor:pointer}
+.jst-row:first-child{border-top:0}
+.jst-row:focus-visible{outline:3px solid var(--accent);outline-offset:-3px}
 .dlg{position:fixed;inset:0;z-index:40;background:rgb(0 0 0 / .5);display:flex;align-items:center;justify-content:center;padding:16px}
 .dlg .card{width:100%;max-width:360px;gap:8px}
 .dlg input[type=password]{width:100%;font:inherit;font-size:18px;padding:11px 12px;border:1.5px solid var(--line);border-radius:var(--r);background:var(--bg);color:var(--ink)}
@@ -255,6 +268,30 @@ body.typing .wrap{padding-bottom:60vh}
     <h2>รอบนับทั้งหมด</h2>
     <div id="roundList"></div>
   </section>
+
+  <!-- JST STOCK -->
+  <section id="v-jst" hidden>
+    <form id="jstForm" class="card" autocomplete="off">
+      <div class="field">
+        <label for="jstQ">ค้นหาสต๊อกใน JST: สแกนบาร์โค้ด / พิมพ์รหัสสินค้า / พิมพ์ชื่อ</label>
+        <div class="row">
+          <input id="jstQ" type="search" class="big" placeholder="สแกน หรือพิมพ์ SKU / ชื่อสินค้า" enterkeyhint="search" autocomplete="off">
+          <button type="button" class="iconbtn" id="jstScan" title="สแกนบาร์โค้ดด้วยกล้อง" aria-label="สแกนบาร์โค้ดด้วยกล้อง" style="border:0">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10 8v8M13 8v8M16 8v8"/></svg>
+          </button>
+        </div>
+      </div>
+      <button class="primary" type="submit" id="jstGo">ค้นหาใน JST</button>
+      <p id="jstMsg" class="hint">ระบบเลือกช่องค้นหาให้เอง: ตัวเลข 8–14 หลัก → บาร์โค้ด · รหัสไม่มีเว้นวรรค → รหัสสินค้า · อื่นๆ → ชื่อสินค้า</p>
+    </form>
+    <div id="jstResults" style="margin-top:12px"></div>
+    <h2>รายการที่ค้นหาแล้ว <span id="jstCount" class="muted"></span></h2>
+    <div class="toolbar">
+      <button type="button" class="ghost" id="jstExport">ดาวน์โหลด Excel (.csv)</button>
+      <button type="button" class="ghost" id="jstClear">ล้างรายการ</button>
+    </div>
+    <div id="jstList"></div>
+  </section>
 </div>
 
 <div id="toast" hidden></div>
@@ -289,6 +326,7 @@ body.typing .wrap{padding-bottom:60vh}
 <nav class="tabs" aria-label="เมนู"><div class="in">
   <button type="button" data-v="count" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6v12M8 6v12M12 6v12M16 6v12M20 6v12"/></svg>นับ</button>
   <button type="button" data-v="sum"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 5h16M4 10h16M4 15h10M4 20h7"/></svg>สรุปยอด</button>
+  <button type="button" data-v="jst"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M7 21v-8h10v8M7 17h10"/></svg>สต๊อก JST</button>
   <button type="button" data-v="rounds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>รอบนับ</button>
 </div></nav>
 
@@ -406,7 +444,7 @@ function toast(msg){ const t = $('#toast'); t.textContent = msg; t.hidden = fals
 // ---------- views ----------
 function setView(v){
   S.view = v;
-  for (const id of ['count','sum','rounds']) $('#v-' + id).hidden = id !== v;
+  for (const id of ['count','sum','jst','rounds']) $('#v-' + id).hidden = id !== v;
   document.querySelectorAll('nav.tabs button').forEach(b => { if (b.dataset.v === v) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
   render();
   window.scrollTo(0, 0);
@@ -418,6 +456,7 @@ function render(){
   renderHeader();
   if (S.view === 'count') { renderProd(); renderRecent(); }
   else if (S.view === 'sum') renderSummary();
+  else if (S.view === 'jst') renderJst();
   else renderRounds();
 }
 
@@ -695,12 +734,15 @@ async function scanLoop(){
 }
 function stopStream(){ if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; track = null; } }
 function closeScanner(){ scanning = false; stopStream(); $('#scanVideo').srcObject = null; $('#scanner').hidden = true; }
+let scanFor = 'count'; // which screen opened the scanner
 function gotCode(code){
   try { navigator.vibrate && navigator.vibrate(80); } catch {}
+  if (scanFor === 'jst') { $('#jstQ').value = norm(code); jstSearchNow(); return; }
   $('#code').value = norm(code); resolveEnter();
   if (!S.sel) { $('#scanMsg').className = 'hint ok'; $('#scanMsg').textContent = 'อ่านได้: ' + norm(code); }
 }
-$('#scanBtn').addEventListener('click', openScanner);
+$('#scanBtn').addEventListener('click', () => { scanFor = 'count'; openScanner(); });
+$('#jstScan').addEventListener('click', () => { scanFor = 'jst'; openScanner(); });
 $('#scanClose').addEventListener('click', closeScanner);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible' && scanning) closeScanner(); });
 
@@ -856,6 +898,105 @@ $('#xlsx').addEventListener('click', async () => {
     msg.append('ถ้าไฟล์ไม่ดาวน์โหลดเอง ', h('a', { href: f.url, target: '_blank', rel: 'noopener', text: 'กดเปิดไฟล์ที่นี่' }));
   } catch (e) { msg.className = 'hint bad'; msg.textContent = errMsg(e); }
   finally { btn.disabled = false; }
+});
+
+// ---------- JST stock (looked up on the server; the phone never sees the JST account) ----------
+const JST_BY = { barcode: 'บาร์โค้ด', sku: 'รหัสสินค้า', name: 'ชื่อสินค้า' };
+const J = { q: '', by: '', total: 0, at: 0, rows: [], open: '', busy: false, seen: new Map() };
+try { JSON.parse(lsGet('tmws.jstSeen') || '[]').forEach(r => J.seen.set(r.sku, r)); } catch {}
+const saveSeen = () => lsSet('tmws.jstSeen', JSON.stringify([...J.seen.values()].slice(-300)));
+const countedFor = r => S.counts.filter(c => !c.void && (canon(c) === r.sku || c.sku === r.sku || (r.barcode && c.barcode === r.barcode))).reduce((a, c) => a + c.qty, 0);
+const hhmm = ms => { const d = new Date(ms); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+
+async function jstSearchNow(){
+  const q = $('#jstQ').value.trim(), msg = $('#jstMsg');
+  if (!q) { msg.className = 'hint bad'; msg.textContent = 'พิมพ์หรือสแกนสินค้าที่ต้องการค้นหา'; $('#jstQ').focus(); return; }
+  if (J.busy) return;
+  J.busy = true; $('#jstGo').disabled = true; $('#jstGo').textContent = 'กำลังค้นหาใน JST…';
+  msg.className = 'hint'; msg.textContent = '';
+  try {
+    const r = await run('jstSearch', q, S.pin);
+    Object.assign(J, { q, by: r.by, total: r.total, at: r.at, rows: r.rows, open: r.rows.length === 1 ? r.rows[0].sku : '' });
+    r.rows.forEach(x => { J.seen.delete(x.sku); J.seen.set(x.sku, Object.assign({}, x, { at: r.at })); });
+    saveSeen();
+    try { navigator.vibrate && navigator.vibrate(40); } catch {}
+  } catch (e) {
+    const m = (e && e.message) || '';
+    msg.className = 'hint bad';
+    msg.textContent = m === 'JST_CAPTCHA' ? 'JST ขอให้ยืนยันตัวตน (CAPTCHA) แจ้งหัวหน้าให้ล็อกอินเว็บ JST ด้วยมือ 1 ครั้ง แล้วลองใหม่' : errMsg(e);
+  } finally {
+    J.busy = false; $('#jstGo').disabled = false; $('#jstGo').textContent = 'ค้นหาใน JST';
+    renderJst();
+  }
+}
+$('#jstForm').addEventListener('submit', e => { e.preventDefault(); $('#jstQ').blur(); jstSearchNow(); });
+
+function jstCard(r){
+  const counted = countedFor(r), round = curRound(), diff = counted - r.qty;
+  return h('div', { class: 'jst-card' },
+    h('div', {}, h('div', { class: 'pname', text: r.name || r.sku }),
+      h('div', { class: 'meta', text: ['SKU ' + r.sku, r.barcode && 'BC ' + r.barcode, r.brand].filter(Boolean).join(' · ') })),
+    h('div', { class: 'metrics' },
+      h('div', { class: 'metric' }, h('div', { class: 'l', text: 'คงคลัง JST' }), h('div', { class: 'v', text: num(r.qty) })),
+      h('div', { class: 'metric' }, h('div', { class: 'l', text: 'พร้อมขาย' }), h('div', { class: 'v', text: num(r.available) })),
+      round
+        ? h('div', { class: 'metric ' + (counted && diff ? 'warn' : counted ? 'ok' : '') },
+            h('div', { class: 'l', text: 'นับได้รอบนี้' }),
+            h('div', { class: 'v' }, counted ? num(counted) : '–', counted && diff ? h('span', { style: 'font-size:12px', text: ' ' + (diff > 0 ? '+' : '') + num(diff) }) : null))
+        : h('div', { class: 'metric' }, h('div', { class: 'l', text: 'จองตามออเดอร์' }), h('div', { class: 'v', text: num(r.orderLock) }))),
+    h('div', { class: 'jst-more' },
+      round ? h('span', { text: 'จองตามออเดอร์ ' + num(r.orderLock) }) : null,
+      r.purchase ? h('span', { text: 'กำลังสั่งซื้อ ' + num(r.purchase) }) : null,
+      r.inQty ? h('span', { text: 'รอรับเข้า ' + num(r.inQty) }) : null,
+      r.defective ? h('span', { text: 'ชำรุด ' + num(r.defective) }) : null,
+      h('span', { text: 'ขาย 7 วัน ' + num(r.week || 0) + ' · 30 วัน ' + num(r.month || 0) })));
+}
+function renderJst(){
+  const box = $('#jstResults'); box.replaceChildren();
+  if (J.at) {
+    const msg = $('#jstMsg');
+    if (!/bad/.test(msg.className)) {
+      msg.className = 'hint';
+      msg.textContent = `ค้นจาก${JST_BY[J.by] || ''} "${J.q}" · พบ ${num(J.total)} รายการ` + (J.total > J.rows.length ? ` (แสดง ${J.rows.length} แรก)` : '') + ` · ข้อมูล JST ณ ${hhmm(J.at)} น.`;
+    }
+    if (!J.rows.length) box.append(h('div', { class: 'empty', text: 'ไม่พบสินค้านี้ใน JST ลองพิมพ์ชื่อบางส่วน หรือรหัสสินค้า' }));
+    else if (J.rows.length === 1) box.append(jstCard(J.rows[0]));
+    else {
+      const list = h('div', { class: 'list' });
+      for (const r of J.rows) {
+        list.append(h('button', { type: 'button', class: 'jst-row', 'aria-expanded': String(J.open === r.sku), onclick: () => { J.open = J.open === r.sku ? '' : r.sku; renderJst(); } },
+          h('div', { class: 'main', style: 'flex:1;min-width:0' }, h('div', { class: 't1' }, h('b', { text: r.name || r.sku })), h('div', { class: 't2 mono', text: r.sku })),
+          h('div', { style: 'text-align:right' }, h('div', { class: 'qty', text: num(r.qty) }), h('div', { class: 't2', text: 'พร้อมขาย ' + num(r.available) }))));
+        if (J.open === r.sku) list.append(h('div', { style: 'padding:0 8px 10px' }, jstCard(r)));
+      }
+      box.append(list);
+    }
+  }
+  const seen = [...J.seen.values()].reverse();
+  $('#jstCount').textContent = seen.length ? `(${seen.length})` : '';
+  const lb = $('#jstList'); lb.replaceChildren();
+  if (!seen.length) { lb.append(h('div', { class: 'empty', text: 'สินค้าที่ค้นหาจะเก็บไว้ที่นี่ ค้นหลายตัวแล้วกดดาวน์โหลดเป็นไฟล์เดียวได้' })); return; }
+  const list = h('div', { class: 'list' });
+  for (const r of seen.slice(0, 60)) list.append(h('div', { class: 'item' },
+    h('div', { class: 'main' }, h('div', { class: 't1' }, h('b', { text: r.name || r.sku })), h('div', { class: 't2', text: r.sku + ' · ค้นเมื่อ ' + fmtTime(r.at) })),
+    h('div', { style: 'text-align:right' }, h('div', { class: 'qty', text: num(r.qty) }), h('div', { class: 't2', text: 'พร้อมขาย ' + num(r.available) }))));
+  lb.append(list);
+}
+$('#jstClear').addEventListener('click', () => { J.seen.clear(); saveSeen(); renderJst(); });
+$('#jstExport').addEventListener('click', () => {
+  const seen = [...J.seen.values()];
+  if (!seen.length) { toast('ยังไม่มีรายการให้ดาวน์โหลด'); return; }
+  const cell = v => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const rows = [['SKU', 'ชื่อสินค้า', 'Barcode', 'แบรนด์', 'คงคลัง JST', 'พร้อมขาย', 'จองตามออเดอร์', 'กำลังสั่งซื้อ', 'ชำรุด', 'ขาย 7 วัน', 'ขาย 30 วัน', 'นับได้รอบนี้', 'ส่วนต่าง (นับ − JST)', 'ข้อมูล JST ณ']];
+  for (const r of seen) {
+    const c = countedFor(r);
+    // ="..." keeps Excel from turning long barcodes into 8.8095E+12
+    rows.push([r.sku, r.name, r.barcode ? '="' + r.barcode + '"' : '', r.brand, r.qty, r.available, r.orderLock, r.purchase, r.defective, r.week, r.month, c || '', c ? c - r.qty : '', fmtTime(r.at)]);
+  }
+  const blob = new Blob(['﻿' + rows.map(r => r.map(cell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const d = new Date(), url = URL.createObjectURL(blob);
+  const a = h('a', { href: url, download: `สต๊อก JST ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}${pad(d.getMinutes())}.csv` });
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60e3);
 });
 
 // ---------- rounds ----------
