@@ -129,7 +129,8 @@ tr.void td{text-decoration:line-through;color:var(--muted)}
 .notice{padding:10px 12px;border-radius:8px;background:var(--warn-soft);color:var(--ink);font-size:14px;margin-bottom:12px;display:flex;flex-direction:column;gap:8px}
 .sync{font-size:12px;color:var(--muted);text-align:right;margin:-6px 0 8px}
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:10;background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom,0px)}
-nav.tabs .in{display:grid;grid-template-columns:repeat(4,1fr);width:100%;max-width:640px}
+nav.tabs .in{display:grid;grid-template-columns:repeat(5,1fr);width:100%;max-width:640px}
+@media (max-width:420px){nav.tabs button{font-size:11px;padding-inline:2px}}
 nav.tabs button{font:inherit;font-size:13px;font-weight:600;border:0;background:transparent;color:var(--muted);padding:9px 4px 11px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer}
 nav.tabs button svg{width:22px;height:22px}
 nav.tabs button[aria-current=page]{color:var(--accent)}
@@ -150,6 +151,8 @@ body.typing .wrap{padding-bottom:60vh}
 .metric .v{font-family:var(--f-mono);font-size:20px;font-weight:600}
 .metric.warn{background:var(--warn-soft)} .metric.warn .l,.metric.warn .v{color:var(--warn)}
 .metric.ok{background:var(--ok-soft)} .metric.ok .l,.metric.ok .v{color:var(--ok)}
+.jst-bins{font-size:13px;display:flex;flex-wrap:wrap;gap:4px 10px}
+.jst-bins b{font-family:var(--f-mono)}
 .jst-more{font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 12px}
 .jst-row{all:unset;box-sizing:border-box;display:flex;gap:10px;align-items:center;width:100%;padding:10px 14px;border-top:1px solid var(--line);cursor:pointer}
 .jst-row:first-child{border-top:0}
@@ -292,6 +295,21 @@ body.typing .wrap{padding-bottom:60vh}
     </div>
     <div id="jstList"></div>
   </section>
+
+  <!-- EXPIRY ALERT -->
+  <section id="v-exp" hidden>
+    <p class="hint" id="expHead"></p>
+    <div id="expKpis" class="kpis"></div>
+    <div class="toolbar">
+      <div class="seg" role="group" aria-label="กรอง" id="expSeg"></div>
+    </div>
+    <div class="toolbar">
+      <button type="button" class="ghost" id="expRefresh">รีเฟรช</button>
+      <button type="button" class="ghost" id="expExport">ดาวน์โหลด Excel (.csv)</button>
+    </div>
+    <div id="expList"></div>
+    <p class="hint" style="margin-top:10px">วันหมดอายุมาจากการนับในรอบนี้ (JST ไม่ได้บันทึก EXP) · "ขายไม่ทัน" ประมาณจากยอดขาย 30 วันใน JST โดยถือว่าขายล็อตที่หมดอายุก่อนออกก่อน (FEFO)</p>
+  </section>
 </div>
 
 <div id="toast" hidden></div>
@@ -327,6 +345,7 @@ body.typing .wrap{padding-bottom:60vh}
   <button type="button" data-v="count" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6v12M8 6v12M12 6v12M16 6v12M20 6v12"/></svg>นับ</button>
   <button type="button" data-v="sum"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 5h16M4 10h16M4 15h10M4 20h7"/></svg>สรุปยอด</button>
   <button type="button" data-v="jst"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M7 21v-8h10v8M7 17h10"/></svg>สต๊อก JST</button>
+  <button type="button" data-v="exp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg>หมดอายุ</button>
   <button type="button" data-v="rounds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>รอบนับ</button>
 </div></nav>
 
@@ -444,7 +463,7 @@ function toast(msg){ const t = $('#toast'); t.textContent = msg; t.hidden = fals
 // ---------- views ----------
 function setView(v){
   S.view = v;
-  for (const id of ['count','sum','jst','rounds']) $('#v-' + id).hidden = id !== v;
+  for (const id of ['count','sum','jst','exp','rounds']) $('#v-' + id).hidden = id !== v;
   document.querySelectorAll('nav.tabs button').forEach(b => { if (b.dataset.v === v) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
   render();
   window.scrollTo(0, 0);
@@ -457,6 +476,7 @@ function render(){
   if (S.view === 'count') { renderProd(); renderRecent(); }
   else if (S.view === 'sum') renderSummary();
   else if (S.view === 'jst') renderJst();
+  else if (S.view === 'exp') loadExpiry();
   else renderRounds();
 }
 
@@ -945,6 +965,8 @@ function jstCard(r){
             h('div', { class: 'l', text: 'นับได้รอบนี้' }),
             h('div', { class: 'v' }, counted ? num(counted) : '–', counted && diff ? h('span', { style: 'font-size:12px', text: ' ' + (diff > 0 ? '+' : '') + num(diff) }) : null))
         : h('div', { class: 'metric' }, h('div', { class: 'l', text: 'จองตามออเดอร์' }), h('div', { class: 'v', text: num(r.orderLock) }))),
+    r.bins && r.bins.length ? h('div', { class: 'jst-bins' }, h('span', { class: 'muted', text: 'ตำแหน่งใน JST:' }),
+      r.bins.map(b => h('span', {}, b.temp ? b.bin + ' ' : h('b', { text: b.bin + ' ' }), num(b.qty)))) : null,
     h('div', { class: 'jst-more' },
       round ? h('span', { text: 'จองตามออเดอร์ ' + num(r.orderLock) }) : null,
       r.purchase ? h('span', { text: 'กำลังสั่งซื้อ ' + num(r.purchase) }) : null,
@@ -997,6 +1019,99 @@ $('#jstExport').addEventListener('click', () => {
   const blob = new Blob(['﻿' + rows.map(r => r.map(cell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
   const d = new Date(), url = URL.createObjectURL(blob);
   const a = h('a', { href: url, download: `สต๊อก JST ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}${pad(d.getMinutes())}.csv` });
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60e3);
+});
+
+// ---------- expiry alert (EXP from our counts; JST adds current stock, bins and sales) ----------
+const X = { data: null, roundId: null, loading: false, err: '', filter: 'risk' };
+const EXP_FILTERS = [['risk', '≤180 วัน'], ['expired', 'หมดแล้ว'], ['d90', '≤90 วัน'], ['slow', 'ขายไม่ทัน'], ['all', 'ทั้งหมด']];
+
+async function loadExpiry(force){
+  if (X.loading) return;
+  if (X.data && !force && X.roundId === S.roundId) { renderExpiry(); return; }
+  X.loading = true; X.err = ''; renderExpiry();
+  try { X.data = await run('expiryReport', S.roundId || '', S.pin); X.roundId = S.roundId; }
+  catch (e) { X.err = errMsg(e); }
+  finally { X.loading = false; renderExpiry(); }
+}
+/** FEFO estimate per lot: units with an earlier EXP sell first, then this lot, at the 30-day sales rate */
+function expiryItems(){
+  const d = X.data; if (!d) return [];
+  const bySku = new Map();
+  for (const it of d.items) { const k = it.sku || it.barcode || it.name; if (!bySku.has(k)) bySku.set(k, []); bySku.get(k).push(it); }
+  const out = [];
+  for (const list of bySku.values()) {
+    list.sort((a, b) => (a.exp || '9').localeCompare(b.exp || '9'));
+    let ahead = 0;
+    for (const it of list) {
+      const j = it.sku ? d.jst[it.sku] : null, perDay = j && j.month > 0 ? j.month / 30 : 0;
+      const sellDays = perDay ? Math.ceil((ahead + it.qty) / perDay) : null;
+      const leftover = it.days == null ? 0 : it.days < 0 ? it.qty : perDay ? Math.max(0, Math.round(ahead + it.qty - perDay * it.days)) : it.qty;
+      const unsold = Math.min(it.qty, leftover);
+      // only flag lots expiring within a year, so slow movers with far-off EXP don't flood the list
+      out.push(Object.assign({}, it, { j, perDay, sellDays, unsold, slow: it.days != null && it.days <= 365 && unsold > 0 }));
+      ahead += it.qty;
+    }
+  }
+  return out.sort((a, b) => (a.days == null ? 1e9 : a.days) - (b.days == null ? 1e9 : b.days) || (a.name || '').localeCompare(b.name || ''));
+}
+const expMatch = (it, f) => f === 'all' ? true : it.days == null ? false
+  : f === 'expired' ? it.days < 0 : f === 'd90' ? it.days <= CRIT_DAYS : f === 'slow' ? it.slow : it.days <= NEAR_DAYS;
+
+function renderExpiry(){
+  const head = $('#expHead'), box = $('#expList'); box.replaceChildren();
+  const d = X.data;
+  head.textContent = X.loading ? 'กำลังโหลดข้อมูลจากรอบนับและ JST…'
+    : d && d.round ? `รอบ "${d.round.name}" · ข้อมูล ณ ${hhmm(d.at)} น.` : '';
+  if (X.err) { box.append(h('div', { class: 'notice', text: X.err })); return; }
+  if (!d) return;
+  if (!d.round) { box.append(h('div', { class: 'empty', text: 'ยังไม่มีรอบนับ วันหมดอายุมาจากการนับสต๊อกในแอปนี้ (JST ไม่ได้บันทึก EXP)' })); return; }
+  if (d.jstError) box.append(h('div', { class: 'notice', text: d.jstError === 'JST_CAPTCHA'
+    ? 'ดึงยอดจาก JST ไม่ได้: JST ขอ CAPTCHA ให้ล็อกอินเว็บ JST ด้วยมือ 1 ครั้ง แล้วกดรีเฟรช' : 'ดึงยอดจาก JST ไม่ได้: ' + d.jstError + ' (แสดงเฉพาะข้อมูลการนับ)' }));
+  const items = expiryItems();
+  const sumQ = l => num(l.reduce((a, i) => a + i.qty, 0));
+  const exp = items.filter(i => i.days != null && i.days < 0), d90 = items.filter(i => i.days != null && i.days >= 0 && i.days <= CRIT_DAYS),
+    d180 = items.filter(i => i.days != null && i.days > CRIT_DAYS && i.days <= NEAR_DAYS), slow = items.filter(i => i.slow);
+  $('#expKpis').replaceChildren(
+    kpi(sumQ(exp), `หมดอายุแล้ว (${exp.length} ล็อต)`, exp.length > 0),
+    kpi(sumQ(d90), `≤90 วัน (${d90.length} ล็อต)`, d90.length > 0),
+    kpi(sumQ(d180), `91–180 วัน (${d180.length} ล็อต)`),
+    kpi(num(slow.reduce((a, i) => a + i.unsold, 0)), `คาดว่าขายไม่ทัน (${slow.length} ล็อต)`, slow.length > 0));
+  document.querySelectorAll('#expSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.f === X.filter)));
+  const list = items.filter(i => expMatch(i, X.filter));
+  if (!items.length) { box.append(h('div', { class: 'empty', text: 'รอบนี้ยังไม่มีการนับ เมื่อทีมนับพร้อมวันหมดอายุ รายการจะขึ้นที่นี่' })); return; }
+  if (!list.length) { box.append(h('div', { class: 'empty', text: 'ไม่มีสินค้าในกลุ่มนี้' })); return; }
+  const wrap = h('div', { class: 'list' });
+  for (const it of list) {
+    const j = it.j, bins = j && j.bins.length ? j.bins.slice(0, 3).map(b => b.bin + ' ' + num(b.qty)).join(' · ') : '';
+    wrap.append(h('div', { class: 'item', style: 'align-items:flex-start' },
+      h('div', { class: 'main' },
+        h('div', { class: 't1' }, h('b', { text: it.name || it.sku }), h('span', { class: 'mono muted', text: it.sku || 'ยังไม่มี SKU' })),
+        h('div', { class: 'exps' }, h('span', { class: 'chip', style: 'cursor:inherit' }, h('span', { text: fmtExp(it.exp) }), pill(it.exp))),
+        h('div', { class: 't2' }, j
+          ? `JST คงเหลือ ${num(j.qty)} · ขาย 30 วัน ${num(j.month || 0)}` + (bins ? ` · ${bins}` : '')
+          : it.sku && !X.data.jstError ? 'ไม่พบใน JST' : ''),
+        it.slow ? h('div', { class: 't2', style: 'color:var(--bad);font-weight:600', text: it.days < 0
+          ? 'หมดอายุแล้ว ควรแยกออกจากชั้นขาย'
+          : j && it.perDay ? `ขายถึงล็อตนี้หมดใน ~${num(it.sellDays)} วัน · คาดว่าเหลือ ~${num(it.unsold)} ชิ้นตอนหมดอายุ` : 'ไม่มียอดขายใน 30 วัน เสี่ยงขายไม่ทัน' }) : null,
+        it.locs ? h('div', { class: 't2', text: 'นับที่ ' + it.locs }) : null),
+      h('div', { style: 'text-align:right' }, h('div', { class: 'qty', text: num(it.qty) }), h('div', { class: 't2', text: 'ชิ้นที่นับได้' }))));
+  }
+  box.append(wrap);
+}
+$('#expSeg').append(...EXP_FILTERS.map(([f, label]) => h('button', { type: 'button', 'data-f': f, 'aria-pressed': String(f === X.filter), text: label,
+  onclick: () => { X.filter = f; renderExpiry(); } })));
+$('#expRefresh').addEventListener('click', () => loadExpiry(true));
+$('#expExport').addEventListener('click', () => {
+  const items = expiryItems().filter(i => expMatch(i, X.filter));
+  if (!items.length) { toast('ไม่มีรายการให้ดาวน์โหลด'); return; }
+  const cell = v => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const rows = [['SKU', 'ชื่อสินค้า', 'Barcode', 'วันหมดอายุ', 'เหลืออีก (วัน)', 'จำนวนที่นับได้ (ล็อตนี้)', 'JST คงเหลือ', 'ขาย 30 วัน', 'ขายถึงล็อตนี้หมดใน (วัน)', 'คาดว่าขายไม่ทัน (ชิ้น)', 'ตำแหน่งใน JST', 'ตำแหน่งที่นับ']];
+  for (const i of items) rows.push([i.sku, i.name, i.barcode ? '="' + i.barcode + '"' : '', fmtExp(i.exp), i.days == null ? '' : i.days, i.qty,
+    i.j ? i.j.qty : '', i.j ? i.j.month : '', i.sellDays == null ? '' : i.sellDays, i.unsold || '', i.j ? i.j.bins.map(b => b.bin + ' ' + b.qty).join(' / ') : '', i.locs]);
+  const blob = new Blob(['﻿' + rows.map(r => r.map(cell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const dt = new Date(), url = URL.createObjectURL(blob);
+  const a = h('a', { href: url, download: `ใกล้หมดอายุ ${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}.csv` });
   document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60e3);
 });
 
