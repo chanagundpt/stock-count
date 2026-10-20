@@ -157,6 +157,52 @@ body.typing .wrap{padding-bottom:60vh}
 .jst-row{all:unset;box-sizing:border-box;display:flex;gap:10px;align-items:center;width:100%;padding:10px 14px;border-top:1px solid var(--line);cursor:pointer}
 .jst-row:first-child{border-top:0}
 .jst-row:focus-visible{outline:3px solid var(--accent);outline-offset:-3px}
+/* login + account (same design as P.O. Tracker) */
+body.locked .wrap, body.locked nav.tabs, body.locked #toast:not(.keep){display:none!important}
+.login{position:fixed;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;padding:20px 16px;overflow:auto;
+  background:radial-gradient(1200px 600px at 10% -10%, var(--accent-soft), transparent 60%),radial-gradient(900px 500px at 110% 110%, rgba(31,32,54,.18), transparent 60%),var(--bg)}
+.login-card{width:100%;max-width:400px;background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:30px 26px 22px;
+  box-shadow:0 20px 60px rgba(16,24,40,.18);display:grid;gap:14px}
+.login-brand{display:flex;flex-direction:column;align-items:center;gap:6px;margin-bottom:4px}
+.login-brand img{height:46px;width:auto}
+.login-brand h1{margin:6px 0 0;font-size:22px;letter-spacing:.2px}
+.login-brand p{margin:0;color:var(--muted);font-size:13.5px}
+.login .field input{padding:11px 12px;font-size:16px;border-radius:11px}
+.pw{position:relative}
+.pw input{padding-right:52px!important}
+.pw button{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:none;color:var(--muted);font:inherit;font-size:13px;padding:6px 8px;border-radius:8px;cursor:pointer}
+.rem{display:flex;gap:8px;align-items:center;font-size:13.5px;color:var(--muted);cursor:pointer}
+.rem input{width:17px;height:17px;accent-color:var(--accent)}
+.lg-err{color:var(--bad);background:var(--bad-soft);border-radius:10px;padding:8px 12px;font-size:13.5px;display:none}
+.lg-err.show{display:block}
+.login button.primary{border-radius:12px}
+.login-foot{text-align:center;color:var(--muted);font-size:12.5px}
+.login .ver{position:fixed;bottom:10px;right:14px;color:var(--muted);font-size:11.5px}
+@media (prefers-color-scheme: dark){.login-brand img{filter:brightness(0) invert(.92)}}
+.avatar{flex:none;width:32px;height:32px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:700;font-size:14px;cursor:pointer;display:grid;place-items:center}
+.modal{position:fixed;inset:0;z-index:60;background:rgb(0 0 0 / .45);display:flex;align-items:center;justify-content:center;padding:16px}
+.modal-card{width:100%;max-width:420px;max-height:calc(100% - 16px);overflow:auto;background:var(--surface);color:var(--ink);border-radius:16px;box-shadow:0 20px 60px rgb(0 0 0 / .25);display:flex;flex-direction:column}
+.modal-card.wide{max-width:640px}
+.modal-head{font-weight:700;font-size:16px;padding:16px 18px 6px}
+.modal-body{padding:8px 18px 12px;display:grid;gap:12px}
+.modal-body input[type=text],.modal-body input[type=password],.modal-body select{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1.5px solid var(--line);border-radius:var(--r);background:var(--bg);color:var(--ink)}
+.modal-body input:disabled{opacity:.6}
+.modal-foot{display:flex;gap:8px;align-items:center;padding:12px 18px 16px;border-top:1px solid var(--line);flex-wrap:wrap}
+button.ghost.solid{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.ghost.big{font-size:15px;padding:11px 14px;text-align:left}
+button.ghost:disabled{opacity:.5}
+.utable{width:100%;border-collapse:collapse;font-size:13.5px}
+.utable th,.utable td{padding:8px 8px;border-top:1px solid var(--line);text-align:center;vertical-align:middle;white-space:nowrap}
+.utable th{font-size:12px;color:var(--muted);font-weight:600}
+.utable .nm{text-align:left;white-space:normal}
+.utable .sub{display:none;font-size:12px;color:var(--muted);font-weight:400}
+@media (max-width:520px){.utable th:nth-child(2),.utable td:nth-child(2),.utable th:nth-child(4),.utable td:nth-child(4){display:none}.utable .sub{display:block}}
+.role{display:inline-block;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:600}
+.role.admin{background:linear-gradient(135deg,#a78bfa,#7c3aed);color:#fff}
+.role.user{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
+.off{color:var(--bad);font-size:12px;font-weight:600}
+.me-card{display:flex;gap:12px;align-items:center;padding:4px 0 6px}
+.me-av{width:44px;height:44px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;flex:none}
 .dlg{position:fixed;inset:0;z-index:40;background:rgb(0 0 0 / .5);display:flex;align-items:center;justify-content:center;padding:16px}
 .dlg .card{width:100%;max-width:360px;gap:8px}
 .dlg input[type=password]{width:100%;font:inherit;font-size:18px;padding:11px 12px;border:1.5px solid var(--line);border-radius:var(--r);background:var(--bg);color:var(--ink)}
@@ -177,6 +223,7 @@ body.typing .wrap{padding-bottom:60vh}
   <header class="top">
     <h1 class="logo"><img alt="2NK" width="59" height="28" src="data:image/png;base64,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"><span>STOCK COUNT</span></h1>
     <button class="roundchip none" id="roundChip" type="button">กำลังโหลด…</button>
+    <button class="avatar" id="meBtn" type="button" aria-label="บัญชีของฉัน" hidden>?</button>
   </header>
   <div id="notice"></div>
   <div class="sync" id="sync"></div>
@@ -184,10 +231,10 @@ body.typing .wrap{padding-bottom:60vh}
   <!-- COUNT -->
   <section id="v-count">
     <form id="countForm" autocomplete="off" novalidate>
-      <div class="who" id="whoBar" hidden>ผู้นับ: <b id="whoName"></b><button type="button" class="ghost" id="whoEdit">เปลี่ยนชื่อ</button></div>
+      <div class="who" id="whoBar" hidden>ผู้นับ: <b id="whoName"></b><button type="button" class="ghost" id="whoEdit">บัญชี</button></div>
       <div class="grid2">
         <div class="field" id="meField">
-          <label for="me">ชื่อผู้นับ (ใส่ครั้งเดียว ระบบจำไว้)</label>
+          <label for="me">ชื่อผู้นับ</label>
           <input id="me" type="text" placeholder="เช่น สมชาย">
         </div>
         <div class="field">
@@ -420,7 +467,8 @@ const num = n => n.toLocaleString('th-TH');
 
 // ---------- state ----------
 const S = {
-  ready: false, error: '', pinRequired: false, pin: lsGet('tmws.pin') || '',
+  ready: false, error: '', me: null,
+  pin: (() => { try { return sessionStorage.getItem('tmws.token') || ''; } catch { return ''; } })() || lsGet('tmws.token') || '', // login token
   rounds: [], roundId: lsGet('tmws.round') || '',
   counts: [], syncedAt: 0,
   products: [], byKey: new Map(), byCode: new Map(),
@@ -429,7 +477,7 @@ const S = {
   filter: 'all', q: '', open: new Set(),
 };
 const curRound = () => S.rounds.find(r => r.id === S.roundId) || null;
-const myName = () => $('#me').value.trim();
+const myName = () => (S.me && (S.me.name || S.me.username)) || ''; // the signed-in account
 
 // ---------- product database ----------
 function setProducts(list){
@@ -486,11 +534,6 @@ function renderHeader(){
   chip.textContent = !S.ready ? 'กำลังโหลด…' : r ? (r.status === 'open' ? r.name : r.name + ' (ปิดแล้ว)') : 'ยังไม่มีรอบนับ';
   const n = $('#notice'); n.replaceChildren();
   if (S.error) n.append(h('div', { class: 'notice', text: S.error }));
-  if (S.pinRequired && !S.pin) {
-    const inp = h('input', { type: 'password', id: 'pinInput', inputmode: 'numeric', placeholder: 'รหัสทีม' });
-    n.append(h('div', { class: 'notice' }, h('b', { text: 'ใส่รหัสทีมก่อนเริ่มนับ (ถามหัวหน้า)' }),
-      h('div', { class: 'row' }, inp, h('button', { class: 'ghost', type: 'button', text: 'ตกลง', onclick: () => { S.pin = inp.value.trim(); lsSet('tmws.pin', S.pin); render(); } }))));
-  }
   if (S.ready && (!r || r.status !== 'open') && S.view === 'count')
     n.append(h('div', { class: 'notice' }, 'ตอนนี้ไม่มีรอบนับที่เปิดอยู่', h('div', {}, h('button', { class: 'ghost', type: 'button', onclick: () => setView('rounds'), text: 'ไปเปิดรอบนับ' }))));
   $('#save').disabled = !S.ready || !r || r.status !== 'open';
@@ -630,16 +673,15 @@ function renderWho(){
   const n = myName();
   $('#whoName').textContent = n;
   $('#whoBar').hidden = !n;
-  $('#meField').hidden = !!n;
+  $('#meField').hidden = true; // the counter is the signed-in account
 }
 $('#me').addEventListener('input', e => lsSet('tmws.me', e.target.value.trim()));
 $('#me').addEventListener('change', e => { e.target.value = e.target.value.trim(); lsSet('tmws.me', e.target.value); renderWho(); renderRecent(); });
 $('#me').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); $('#loc').value ? $('#code').focus() : $('#loc').focus(); } });
-$('#whoEdit').addEventListener('click', () => { $('#whoBar').hidden = true; $('#meField').hidden = false; $('#me').focus(); $('#me').select(); });
+$('#whoEdit').addEventListener('click', () => openUserMenu());
 $('#minus').addEventListener('click', () => { const q = $('#qty'); q.value = Math.max(0, (+q.value || 0) - 1) || ''; });
 $('#plus').addEventListener('click', () => { const q = $('#qty'); q.value = (+q.value || 0) + 1; });
 $('#loc').value = lsGet('tmws.loc') || '';
-$('#me').value = lsGet('tmws.me') || '';
 renderWho();
 updateExpMsg();
 
@@ -839,7 +881,7 @@ $('#countForm').addEventListener('submit', async e => {
 });
 function errMsg(e){
   const m = (e && e.message) || '';
-  if (m === 'PIN_INVALID') { S.pin = ''; lsSet('tmws.pin', ''); renderHeader(); return 'รหัสทีมไม่ถูกต้อง ใส่ใหม่ด้านบน'; }
+  if (m === 'AUTH_REQUIRED') { setTimeout(authLost, 0); return 'หมดเวลาเข้าสู่ระบบ กรุณาเข้าสู่ระบบอีกครั้ง'; }
   if (m === 'ADMIN_INVALID') return 'รหัสผู้ดูแลไม่ถูกต้อง ทำรายการไม่สำเร็จ';
   return m || 'เชื่อมต่อไม่ได้ ลองอีกครั้ง';
 }
@@ -1171,12 +1213,191 @@ function askAdmin(title, note){
 }
 function selectRound(id){ S.roundId = id; lsSet('tmws.round', id); S.counts = []; S.open.clear(); render(); refresh(); }
 
+// ---------- login / account / user admin (same design as P.O. Tracker) ----------
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const ssGet = k => { try { return sessionStorage.getItem(k); } catch { return null; } };
+const ssSet = (k, v) => { try { v == null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, v); } catch {} };
+function saveToken(t, remember){ S.pin = t || ''; lsSet('tmws.token', remember && t ? t : ''); ssSet('tmws.token', t || null); }
+const roleBadge = r => `<span class="role ${r === 'admin' ? 'admin' : 'user'}">${r === 'admin' ? 'ผู้ดูแลระบบ' : 'ผู้ใช้งาน'}</span>`;
+const LOGO = () => ($('.logo img') || {}).src || '';
+
+function openModal(html, wide){
+  const el = document.createElement('div');
+  el.className = 'modal';
+  el.innerHTML = `<div class="modal-card${wide ? ' wide' : ''}" role="dialog" aria-modal="true">${html}</div>`;
+  document.body.append(el);
+  const close = () => el.remove();
+  el.addEventListener('click', e => { if (e.target === el) close(); });
+  return { el, close };
+}
+function confirmBox(title, text, okLabel, danger){
+  return new Promise(res => {
+    const md = openModal(`<div class="modal-head">${esc(title)}</div><div class="modal-body"><div style="white-space:pre-wrap">${esc(text)}</div></div>
+      <div class="modal-foot"><span style="flex:1"></span>${danger === undefined ? '' : '<button class="ghost" data-x>ยกเลิก</button>'}<button class="ghost ${danger ? 'danger' : 'solid'}" data-ok>${esc(okLabel || 'ตกลง')}</button></div>`);
+    const done = v => { md.close(); res(v); };
+    $('[data-ok]', md.el).onclick = () => done(true);
+    const x = $('[data-x]', md.el); if (x) x.onclick = () => done(false);
+  });
+}
+
+function showLoginShell(inner){
+  document.body.classList.add('locked');
+  let el = $('#login');
+  if (!el) { el = document.createElement('div'); el.id = 'login'; el.className = 'login'; document.body.append(el); }
+  el.innerHTML = `<div class="login-card">
+    <div class="login-brand">${LOGO() ? `<img src="${LOGO()}" alt="2NK">` : ''}<h1>Stock Count</h1><p>ระบบนับสต๊อกสินค้า • 2NK</p></div>
+    ${inner}</div><div class="ver">${S.version ? 'v' + esc(S.version) : ''}</div>`;
+  return el;
+}
+function setLoginErr(m){ const e = $('#lgErr'); if (!e) return; e.textContent = m || ''; e.classList.toggle('show', !!m); }
+function showLogin(msg){
+  document.querySelectorAll('.modal').forEach(m => m.remove());
+  if ($('#loginForm')) { setLoginErr(msg || ''); return; }
+  const el = showLoginShell(`
+    <form id="loginForm" autocomplete="on" novalidate>
+      <div style="display:grid;gap:12px">
+        <div class="field"><label for="lgUser">ชื่อผู้ใช้</label><input id="lgUser" name="username" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="username"></div>
+        <div class="field"><label for="lgPass">รหัสผ่าน</label><div class="pw"><input id="lgPass" name="password" type="password" autocomplete="current-password" placeholder="••••••"><button type="button" id="lgEye">แสดง</button></div></div>
+        <label class="rem"><input type="checkbox" id="lgRem" checked> จดจำการเข้าสู่ระบบในเครื่องนี้ (30 วัน)</label>
+        <div class="lg-err" id="lgErr"></div>
+        <button class="primary" type="submit" id="lgBtn">เข้าสู่ระบบ</button>
+      </div>
+    </form>
+    <div class="login-foot">ยังไม่มีบัญชี? ติดต่อผู้ดูแลระบบเพื่อขอชื่อผู้ใช้และรหัสผ่าน</div>`);
+  if (msg) setLoginErr(msg);
+  const u = $('#lgUser'), pw = $('#lgPass');
+  u.value = lsGet('tmws.lastUser') || '';
+  setTimeout(() => (u.value ? pw : u).focus(), 60);
+  $('#lgEye').onclick = () => { const show = pw.type === 'password'; pw.type = show ? 'text' : 'password'; $('#lgEye').textContent = show ? 'ซ่อน' : 'แสดง'; };
+  $('#loginForm').onsubmit = async e => {
+    e.preventDefault();
+    const btn = $('#lgBtn');
+    if (!u.value.trim() || !pw.value) { setLoginErr('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน'); return; }
+    btn.disabled = true; btn.textContent = 'กำลังเข้าสู่ระบบ…'; setLoginErr('');
+    try {
+      const remember = $('#lgRem').checked;
+      const r = await run('login', u.value.trim(), pw.value, remember);
+      saveToken(r.token, remember);
+      lsSet('tmws.lastUser', u.value.trim());
+      await startApp(await run('getInit', r.token));
+      toast('ยินดีต้อนรับ ' + (r.me.name || r.me.username));
+    } catch (err) { setLoginErr(err.message === 'AUTH_REQUIRED' ? 'เข้าสู่ระบบไม่สำเร็จ ลองอีกครั้ง' : err.message); pw.select(); btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ'; }
+  };
+}
+function showSetupNeeded(){
+  showLoginShell(`<div class="lg-err show" style="background:var(--warn-soft);color:var(--ink)">ยังไม่มีบัญชีผู้ดูแลระบบ</div>
+    <div style="font-size:14px;line-height:1.7">สำหรับเจ้าของระบบ:<br>1. เปิด Google Sheet ของ Stock count<br>2. เมนู <b>2nk Stock count → สร้าง / รีเซ็ตบัญชีผู้ดูแลระบบ</b><br>3. กลับมารีเฟรชหน้านี้ แล้วเข้าสู่ระบบ</div>
+    <button class="primary" type="button" onclick="location.reload()">รีเฟรช</button>`);
+}
+function authLost(){
+  if (!S.me) return;
+  saveToken('', false); S.me = null; S.counts = [];
+  showLogin('หมดเวลาเข้าสู่ระบบ กรุณาเข้าสู่ระบบอีกครั้ง');
+}
+function renderMe(){
+  const b = $('#meBtn'), n = (S.me && (S.me.name || S.me.username)) || '';
+  b.hidden = !S.me; b.textContent = n.trim().charAt(0).toUpperCase() || '?'; b.title = 'บัญชีของฉัน: ' + n;
+}
+
+function openUserMenu(){
+  const me = S.me || {};
+  const md = openModal(`<div class="modal-head">บัญชีของฉัน</div><div class="modal-body">
+    <div class="me-card"><div class="me-av">${esc((me.name || me.username || '?').trim().charAt(0).toUpperCase())}</div>
+      <div><b>${esc(me.name)}</b><div class="muted" style="font-size:13px">@${esc(me.username)} • ${roleBadge(me.role)}</div></div></div>
+    <div style="display:grid;gap:8px">
+      ${me.role === 'admin' ? '<button class="ghost big" data-users>👥 จัดการผู้ใช้งาน</button>' : ''}
+      <button class="ghost big" data-pw>🔑 เปลี่ยนรหัสผ่าน</button>
+      <button class="ghost big danger" data-out>↪ ออกจากระบบ</button>
+    </div></div><div class="modal-foot"><span style="flex:1"></span><button class="ghost" data-x>ปิด</button></div>`);
+  $('[data-x]', md.el).onclick = md.close;
+  const us = $('[data-users]', md.el); if (us) us.onclick = () => { md.close(); openUsersAdmin(); };
+  $('[data-pw]', md.el).onclick = () => { md.close(); openChangePassword(); };
+  $('[data-out]', md.el).onclick = async () => { md.close(); await logout(); };
+}
+async function logout(){
+  try { await run('logout', S.pin); } catch {}
+  saveToken('', false); S.me = null; S.counts = []; showLogin(); toast('ออกจากระบบแล้ว');
+}
+function openChangePassword(){
+  const md = openModal(`<div class="modal-head">เปลี่ยนรหัสผ่าน</div><div class="modal-body">
+    <div class="field"><label>รหัสผ่านเดิม</label><input type="password" id="cpOld" autocomplete="current-password"></div>
+    <div class="field"><label>รหัสผ่านใหม่ (อย่างน้อย 6 ตัว)</label><input type="password" id="cpNew" autocomplete="new-password"></div>
+    <div class="field"><label>ยืนยันรหัสผ่านใหม่</label><input type="password" id="cpNew2" autocomplete="new-password"></div>
+  </div><div class="modal-foot"><span style="flex:1"></span><button class="ghost" data-x>ยกเลิก</button><button class="ghost solid" data-ok>บันทึก</button></div>`);
+  $('[data-x]', md.el).onclick = md.close;
+  $('[data-ok]', md.el).onclick = async () => {
+    const o = $('#cpOld', md.el).value, n = $('#cpNew', md.el).value, n2 = $('#cpNew2', md.el).value;
+    if (n.length < 6) return toast('รหัสผ่านใหม่ต้องยาวอย่างน้อย 6 ตัวอักษร');
+    if (n !== n2) return toast('ยืนยันรหัสผ่านไม่ตรงกัน');
+    try { await run('changePassword', S.pin, o, n); md.close(); toast('เปลี่ยนรหัสผ่านแล้ว'); } catch (e) { toast(errMsg(e)); }
+  };
+}
+
+async function openUsersAdmin(){
+  let users;
+  try { users = await run('listUsers', S.pin); } catch (e) { toast(errMsg(e)); return; }
+  const md = openModal(`<div class="modal-head">👥 ผู้ใช้งานระบบ</div><div class="modal-body">
+    <div class="muted" style="font-size:13px">เฉพาะผู้ที่มีบัญชีเท่านั้นที่เข้าใช้ Stock Count ได้ • ผู้ดูแลระบบจัดการผู้ใช้ได้ ผู้ใช้งานทั่วไปนับสต๊อกและดูข้อมูลได้ทุกอย่าง</div>
+    <div class="tbl"><table class="utable"><tr><th class="nm">ชื่อผู้ใช้งาน</th><th>ชื่อผู้ใช้ (login)</th><th>สิทธิ์</th><th>เข้าใช้ล่าสุด</th><th></th></tr>
+      ${users.map(u => `<tr><td class="nm"><b>${esc(u.name)}</b>${u.active ? '' : ' <span class="off">ปิดใช้งาน</span>'}<span class="sub">@${esc(u.username)} · ${u.last_login ? 'เข้าใช้ ' + esc(fmtTime(u.last_login)) : 'ยังไม่เคยเข้าใช้'}</span></td><td>${esc(u.username)}</td>
+        <td>${roleBadge(u.role)}</td><td class="muted">${u.last_login ? esc(fmtTime(u.last_login)) : 'ยังไม่เคย'}</td>
+        <td><button class="ghost" data-edit="${esc(u.username)}">แก้ไข</button></td></tr>`).join('')}
+    </table></div>
+  </div><div class="modal-foot"><button class="ghost solid" data-add>＋ เพิ่มผู้ใช้</button><span style="flex:1"></span><button class="ghost" data-x>ปิด</button></div>`, true);
+  $('[data-x]', md.el).onclick = md.close;
+  $('[data-add]', md.el).onclick = () => { md.close(); openUserForm(null); };
+  md.el.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => { md.close(); openUserForm(users.find(u => u.username === b.dataset.edit)); });
+}
+function randomPassword(){
+  const c = 'abcdefghjkmnpqrstuvwxyz23456789', a = new Uint32Array(8);
+  crypto.getRandomValues(a);
+  return [...a].map(x => c[x % c.length]).join('');
+}
+function openUserForm(u){
+  const isNew = !u; u = u || { username: '', name: '', role: 'user', active: true };
+  const md = openModal(`<div class="modal-head">${isNew ? 'เพิ่มผู้ใช้งาน' : 'แก้ไขผู้ใช้งาน'}</div><div class="modal-body">
+    <div class="field"><label>ชื่อผู้ใช้งาน (ชื่อที่แสดงในระบบ) *</label><input id="ufName" type="text" value="${esc(u.name)}" placeholder="เช่น นุ่น ฝ่ายคลัง"></div>
+    <div class="field"><label>ชื่อผู้ใช้สำหรับเข้าสู่ระบบ (username) *</label><input id="ufUser" type="text" value="${esc(u.username)}" ${isNew ? '' : 'disabled'} autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="a-z 0-9 . _ - เช่น noon"></div>
+    <div class="field"><label>${isNew ? 'รหัสผ่าน * (อย่างน้อย 6 ตัว)' : 'ตั้งรหัสผ่านใหม่ (เว้นว่าง = ไม่เปลี่ยน)'}</label>
+      <div class="pw"><input id="ufPass" type="text" autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="${isNew ? '' : 'เว้นว่างถ้าไม่เปลี่ยน'}"><button type="button" id="ufGen">สุ่ม</button></div></div>
+    <div class="grid2 keep">
+      <div class="field"><label for="ufRole">สิทธิ์</label><select id="ufRole"><option value="user" ${u.role !== 'admin' ? 'selected' : ''}>ผู้ใช้งาน</option><option value="admin" ${u.role === 'admin' ? 'selected' : ''}>ผู้ดูแลระบบ</option></select></div>
+      <div class="field"><label>สถานะ</label><label class="rem" style="padding:10px 0"><input type="checkbox" id="ufActive" ${u.active ? 'checked' : ''}> เปิดใช้งาน</label></div>
+    </div>
+    <div class="muted" style="font-size:13px">แจ้งชื่อผู้ใช้และรหัสผ่านให้เจ้าของบัญชีโดยตรง — ระบบเก็บรหัสแบบเข้ารหัส ไม่มีใครดูรหัสจริงย้อนหลังได้ ถ้าลืม ให้ตั้งรหัสใหม่ที่หน้านี้</div>
+  </div><div class="modal-foot">${isNew ? '' : '<button class="ghost danger" data-del>🗑 ลบผู้ใช้</button>'}<span style="flex:1"></span><button class="ghost" data-x>ยกเลิก</button><button class="ghost solid" data-ok>บันทึก</button></div>`);
+  $('#ufGen', md.el).onclick = () => { $('#ufPass', md.el).value = randomPassword(); };
+  $('[data-x]', md.el).onclick = () => { md.close(); openUsersAdmin(); };
+  $('[data-ok]', md.el).onclick = async () => {
+    const args = { username: $('#ufUser', md.el).value.trim().toLowerCase(), name: $('#ufName', md.el).value.trim(), role: $('#ufRole', md.el).value,
+      active: $('#ufActive', md.el).checked, password: $('#ufPass', md.el).value };
+    if (!args.name) return toast('กรุณาระบุชื่อผู้ใช้งาน');
+    if (isNew && args.password.length < 6) return toast('รหัสผ่านต้องยาวอย่างน้อย 6 ตัวอักษร');
+    $('[data-ok]', md.el).disabled = true;
+    try {
+      await run('saveUser', S.pin, args);
+      md.close();
+      if (args.password) await confirmBox('บันทึกแล้ว', 'แจ้งข้อมูลนี้ให้ ' + args.name + '\n\nชื่อผู้ใช้: ' + args.username + '\nรหัสผ่าน: ' + args.password + '\n\n(หน้านี้จะไม่แสดงรหัสอีก)', 'ตกลง');
+      else toast('บันทึกแล้ว');
+      if (S.me && args.username === S.me.username) { S.me.name = args.name; renderMe(); renderWho(); }
+      openUsersAdmin();
+    } catch (e) { toast(errMsg(e)); $('[data-ok]', md.el).disabled = false; }
+  };
+  const del = $('[data-del]', md.el);
+  if (del) del.onclick = async () => {
+    if (!await confirmBox('ลบผู้ใช้', 'ลบบัญชี “' + u.name + '” (' + u.username + ')? ประวัติการนับเดิมยังอยู่', 'ลบ', true)) return;
+    try { await run('deleteUser', S.pin, u.username); md.close(); toast('ลบผู้ใช้แล้ว'); openUsersAdmin(); } catch (e) { toast(errMsg(e)); }
+  };
+}
+$('#meBtn').addEventListener('click', openUserMenu);
+
 // ---------- sync ----------
 let busy = false;
 async function refresh(){
   if (busy) return; busy = true;
   try {
-    const data = await run('getCounts', S.roundId || '');
+    if (!S.me) return;
+    const data = await run('getCounts', S.roundId || '', S.pin);
     S.rounds = data.rounds;
     if (!S.rounds.some(r => r.id === S.roundId)) {
       const o = S.rounds.find(r => r.status === 'open');
@@ -1184,27 +1405,45 @@ async function refresh(){
       S.roundId = ''; S.counts = [];
     } else S.counts = data.counts;
     S.syncedAt = Date.now(); S.error = ''; S.ready = true;
-  } catch (e) { S.error = /API_URL/.test(e.message) ? e.message : 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจสัญญาณเน็ต ระบบจะลองใหม่เอง'; }
+  } catch (e) {
+    if (e.message === 'AUTH_REQUIRED') { authLost(); return; }
+    S.error = /API_URL/.test(e.message) ? e.message : 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจสัญญาณเน็ต ระบบจะลองใหม่เอง';
+  }
   finally { busy = false; render(); }
 }
 async function loadProducts(){
-  try { setProducts(await run('getProducts')); render(); } catch {}
+  if (!S.me) return;
+  try { setProducts(await run('getProducts', S.pin)); render(); } catch (e) { if (e.message === 'AUTH_REQUIRED') authLost(); }
 }
 async function boot(){
-  render();
-  try {
-    const init = await run('getInit');
-    S.pinRequired = init.pinRequired; S.version = init.version || 'เก่า'; S.productSync = init.productSync || null;
-    setProducts(init.products);
-  } catch (e) { S.error = 'โหลดฐานข้อมูลสินค้าไม่ได้: ' + e.message; }
+  document.body.classList.add('locked');
+  let b;
+  try { b = await run('bootstrap'); }
+  catch (e) { showLoginShell(`<div class="lg-err show">เชื่อมต่อระบบไม่สำเร็จ: ${esc(e.message)}</div><button class="primary" type="button" onclick="location.reload()">ลองใหม่</button>`); return; }
+  S.version = b.version;
+  if (b.needSetup) { showSetupNeeded(); return; }
+  if (S.pin) { try { return await startApp(await run('getInit', S.pin)); } catch (e) { /* expired → login */ } }
+  saveToken('', false);
+  showLogin();
+}
+let timersOn = false;
+async function startApp(init){
+  S.me = init.me; S.version = init.version || S.version; S.productSync = init.productSync || null;
+  setProducts(init.products);
+  const lg = $('#login'); if (lg) lg.remove();
+  document.body.classList.remove('locked');
+  renderMe(); renderWho();
   await refresh();
-  setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, POLL_MS);
-  setInterval(() => { if (document.visibilityState === 'visible') loadProducts(); }, 3 * 60e3); // picks up rows added to the Products sheet
+  if (!timersOn) {
+    timersOn = true;
+    setInterval(() => { if (S.me && document.visibilityState === 'visible') refresh(); }, POLL_MS);
+    setInterval(() => { if (S.me && document.visibilityState === 'visible') loadProducts(); }, 3 * 60e3); // picks up rows added to the Products sheet
+  }
 }
 // keep the phone screen on while counting
 async function wake(){ try { if (navigator.wakeLock && document.visibilityState === 'visible') await navigator.wakeLock.request('screen'); } catch {} }
 document.addEventListener('pointerdown', wake, { once: true });
-document.addEventListener('visibilitychange', () => { wake(); if (document.visibilityState === 'visible' && S.ready) refresh(); });
+document.addEventListener('visibilitychange', () => { wake(); if (document.visibilityState === 'visible' && S.ready && S.me) refresh(); });
 
 boot();
 })();
