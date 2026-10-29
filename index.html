@@ -14,7 +14,7 @@
 <base target="_top">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
 <style>
 /* Layout: one narrow mobile column, a bottom tab bar (นับ / สรุป / รอบนับ), big touch targets for counting in the aisle */
 :root{
@@ -407,7 +407,7 @@ button.ghost:disabled{opacity:.5}
   <button type="button" data-v="rounds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>รอบนับ</button>
 </div></nav>
 
-<script src="https://cdn.jsdelivr.net/npm/zxing-wasm@2.2.4/dist/iife/reader/index.js"></script>
+<script async src="https://cdn.jsdelivr.net/npm/zxing-wasm@2.2.4/dist/iife/reader/index.js"></script>
 <script>
 // ลิงก์ Web app ของ Apps Script (ลงท้ายด้วย /exec) — ใช้เมื่อเปิดหน้านี้จากเว็บภายนอก เช่น GitHub Pages
 const API_URL = 'https://script.google.com/macros/s/AKfycbz-MAgXzixFmmG7f5CPwKAjWguwEqyczwgM3ShqPzDR80batcKZvHKtNZtMARkygo0/exec';
@@ -1212,7 +1212,7 @@ $('#roundForm').addEventListener('submit', async e => {
   try {
     const id = await run('createRound', name, myName(), S.pin, code);
     $('#rname').value = ''; S.roundId = id; lsSet('tmws.round', id);
-    await refresh(); toast('เปิดรอบ "' + name + '" แล้ว'); setView('count');
+    await refresh(true); toast('เปิดรอบ "' + name + '" แล้ว'); setView('count');
   } catch (err) { toast(errMsg(err)); }
   finally { $('#rcreate').disabled = false; }
 });
@@ -1239,7 +1239,7 @@ async function setStatus(r, status){
   const code = await askAdmin(closing ? 'ปิดรอบ "' + r.name + '"' : 'เปิดรอบ "' + r.name + '" อีกครั้ง',
     closing ? 'ปิดแล้วทีมจะบันทึกเพิ่มในรอบนี้ไม่ได้' : 'ทีมจะกลับมาบันทึกในรอบนี้ได้');
   if (code === null) return;
-  try { await run('setRoundStatus', r.id, status, S.pin, code); await refresh(); toast(closing ? 'ปิดรอบแล้ว' : 'เปิดรอบอีกครั้งแล้ว'); } catch (e) { toast(errMsg(e)); }
+  try { await run('setRoundStatus', r.id, status, S.pin, code); await refresh(true); toast(closing ? 'ปิดรอบแล้ว' : 'เปิดรอบอีกครั้งแล้ว'); } catch (e) { toast(errMsg(e)); }
 }
 
 // opening/closing a round needs the supervisor password; it is checked on the server, never stored on the phone
@@ -1254,7 +1254,7 @@ function askAdmin(title, note){
     $('#adminCancel').onclick = () => done(null);
   });
 }
-function selectRound(id){ S.roundId = id; lsSet('tmws.round', id); S.counts = []; S.open.clear(); render(); refresh(); }
+function selectRound(id){ S.roundId = id; lsSet('tmws.round', id); S.counts = []; S.rev = ''; S.open.clear(); render(); refresh(true); }
 
 // ---------- login / account / user admin (same design as P.O. Tracker) ----------
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -1322,10 +1322,10 @@ function showLogin(msg){
     btn.disabled = true; btn.textContent = 'กำลังเข้าสู่ระบบ…'; setLoginErr('');
     try {
       const remember = $('#lgRem').checked;
-      const r = await run('login', u.value.trim(), pw.value, remember);
+      const r = await run('login', u.value.trim(), pw.value, remember, S.roundId || '');
       saveToken(r.token, remember);
       lsSet('tmws.lastUser', u.value.trim());
-      await startApp(await run('getInit', r.token));
+      await startApp(r.init || await run('getInit', r.token, S.roundId || ''));
       toast('ยินดีต้อนรับ ' + (r.me.name || r.me.username));
     } catch (err) { setLoginErr(err.message === 'AUTH_REQUIRED' ? 'เข้าสู่ระบบไม่สำเร็จ ลองอีกครั้ง' : err.message); pw.select(); btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ'; }
   };
@@ -1386,10 +1386,10 @@ function suPick(nick){
     const b = $('#suBtn'); b.disabled = true; b.textContent = 'กำลังสร้างบัญชี…'; err('');
     try {
       const keep = $('#suR').checked;
-      const r = await run('signup', { nick: SU.pick.nick, code: $('#suC') ? $('#suC').value.trim() : '', username: u, password: pw, remember: keep });
+      const r = await run('signup', { nick: SU.pick.nick, code: $('#suC') ? $('#suC').value.trim() : '', username: u, password: pw, remember: keep, roundId: S.roundId || '' });
       saveToken(r.token, keep);
       lsSet('tmws.lastUser', u);
-      await startApp(await run('getInit', r.token));
+      await startApp(r.init || await run('getInit', r.token, S.roundId || ''));
       toast('สร้างบัญชีเรียบร้อย ยินดีต้อนรับ ' + (r.me.name || r.me.username));
     } catch (ex) { err(ex.message); b.disabled = false; b.textContent = 'สร้างบัญชีและเข้าสู่ระบบ'; }
   };
@@ -1503,19 +1503,28 @@ function openUserForm(u){
 $('#meBtn').addEventListener('click', openUserMenu);
 
 // ---------- sync ----------
-let busy = false;
-async function refresh(){
+let busy = false, polls = 0;
+/** apply a counts reply; returns true when the saved round is gone and another open round was picked (needs a reload) */
+function applyCounts(data){
+  S.syncedAt = Date.now(); S.error = ''; S.ready = true;
+  if (data.same) return false;
+  S.rev = data.rev || '';
+  S.rounds = data.rounds;
+  if (!S.rounds.some(r => r.id === S.roundId)) {
+    const o = S.rounds.find(r => r.status === 'open');
+    if (o) { S.roundId = o.id; lsSet('tmws.round', o.id); S.rev = ''; return true; }
+    S.roundId = ''; S.counts = [];
+  } else S.counts = data.counts;
+  return false;
+}
+async function refresh(force){
   if (busy) return; busy = true;
   try {
     if (!S.me) return;
-    const data = await run('getCounts', S.roundId || '', S.pin);
-    S.rounds = data.rounds;
-    if (!S.rounds.some(r => r.id === S.roundId)) {
-      const o = S.rounds.find(r => r.status === 'open');
-      if (o) { S.roundId = o.id; lsSet('tmws.round', o.id); busy = false; return await refresh(); }
-      S.roundId = ''; S.counts = [];
-    } else S.counts = data.counts;
-    S.syncedAt = Date.now(); S.error = ''; S.ready = true;
+    // every 6th poll (~48 s) reloads everything, so rows edited by hand in the sheet still show up
+    const rev = force || ++polls % 6 === 0 ? '' : (S.rev || '');
+    const data = await run('getCounts', S.roundId || '', S.pin, rev);
+    if (applyCounts(data)) { busy = false; return await refresh(true); }
   } catch (e) {
     if (e.message === 'AUTH_REQUIRED') { authLost(); return; }
     S.error = /API_URL/.test(e.message) ? e.message : 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจสัญญาณเน็ต ระบบจะลองใหม่เอง';
@@ -1528,12 +1537,16 @@ async function loadProducts(){
 }
 async function boot(){
   document.body.classList.add('locked');
+  // already signed in on this phone → one call opens the app (no separate bootstrap / counts calls)
+  if (S.pin) {
+    try { return await startApp(await run('getInit', S.pin, S.roundId || '')); }
+    catch (e) { if (e.message !== 'AUTH_REQUIRED') { /* fall back to the normal path below */ } }
+  }
   let b;
   try { b = await run('bootstrap'); }
   catch (e) { showLoginShell(`<div class="lg-err show">เชื่อมต่อระบบไม่สำเร็จ: ${esc(e.message)}</div><button class="primary" type="button" onclick="location.reload()">ลองใหม่</button>`); return; }
   S.version = b.version; S.canSignup = !!b.signup;
   if (b.needSetup) { showSetupNeeded(); return; }
-  if (S.pin) { try { return await startApp(await run('getInit', S.pin)); } catch (e) { /* expired → login */ } }
   saveToken('', false);
   showLogin();
 }
@@ -1544,7 +1557,8 @@ async function startApp(init){
   const lg = $('#login'); if (lg) lg.remove();
   document.body.classList.remove('locked');
   renderMe(); renderWho();
-  await refresh();
+  // newer servers send the round's counts with init; older ones need the extra call
+  if (init.rounds && !applyCounts(init)) render(); else await refresh(true);
   if (!timersOn) {
     timersOn = true;
     setInterval(() => { if (S.me && document.visibilityState === 'visible') refresh(); }, POLL_MS);
