@@ -180,8 +180,13 @@ body.locked .wrap, body.locked nav.tabs, body.locked #toast:not(.keep){display:n
 .lg-err.show{display:block}
 .login button.primary{border-radius:12px}
 .login-foot{text-align:center;color:var(--muted);font-size:12.5px;line-height:1.6}
-.login-foot a.ghost{font-size:13.5px}
-.duty-note{font-size:13px;line-height:1.5;background:var(--accent-soft);color:var(--ink);border-radius:10px;padding:8px 12px}
+.login-foot button.ghost{font-size:14px;padding:8px 16px}
+.su-list{display:grid;gap:6px;max-height:min(46vh,360px);overflow:auto;margin-top:10px}
+.su-name{all:unset;box-sizing:border-box;display:flex;gap:10px;align-items:center;padding:9px 12px;border:1px solid var(--line);border-radius:12px;cursor:pointer}
+.su-name:hover,.su-name:focus-visible{background:var(--accent-soft)}
+.me-av.sm{width:30px;height:30px;font-size:14px}
+.linkbtn{all:unset;cursor:pointer;color:var(--accent);font-size:13px;text-decoration:underline}
+.login input[type=search]{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1.5px solid var(--line);border-radius:11px;background:var(--bg);color:var(--ink)}
 a.ghost.big{font-size:15px;padding:11px 14px;text-align:left;display:block}
 .login .ver{position:fixed;bottom:10px;right:14px;color:var(--muted);font-size:11.5px}
 @media (prefers-color-scheme: dark){.login-brand img{filter:brightness(0) invert(.92)}}
@@ -1294,7 +1299,6 @@ function showLogin(msg){
   const el = showLoginShell(`
     <form id="loginForm" autocomplete="on" novalidate>
       <div style="display:grid;gap:12px">
-        ${S.dutyUrl ? '<div class="duty-note">ใช้ Username และรหัสผ่านเดียวกับแอป <b>2NK เวรวันเสาร์</b></div>' : ''}
         <div class="field"><label for="lgUser">ชื่อผู้ใช้ (Username)</label><input id="lgUser" name="username" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="username"></div>
         <div class="field"><label for="lgPass">รหัสผ่าน</label><div class="pw"><input id="lgPass" name="password" type="password" autocomplete="current-password" placeholder="••••••"><button type="button" id="lgEye">แสดง</button></div></div>
         <label class="rem"><input type="checkbox" id="lgRem" checked> จดจำการเข้าสู่ระบบในเครื่องนี้ (30 วัน)</label>
@@ -1302,9 +1306,10 @@ function showLogin(msg){
         <button class="primary" type="submit" id="lgBtn">เข้าสู่ระบบ</button>
       </div>
     </form>
-    ${S.dutyUrl
-      ? `<div class="login-foot">ยังไม่มีบัญชี? สมัครใช้งานที่แอปเวร แล้วกลับมาเข้าสู่ระบบด้วยบัญชีเดียวกัน<br><a class="ghost" style="margin-top:8px" href="${esc(S.dutyUrl)}" target="_blank" rel="noopener">สมัครใช้งานที่ 2NK เวรวันเสาร์</a></div>`
+    ${S.canSignup
+      ? '<div class="login-foot">ยังไม่มีบัญชี?<br><button class="ghost" type="button" id="lgSignup" style="margin-top:8px">＋ สมัครใช้งาน</button></div>'
       : '<div class="login-foot">ยังไม่มีบัญชี? ติดต่อผู้ดูแลระบบเพื่อขอชื่อผู้ใช้และรหัสผ่าน</div>'}`);
+  const sb = $('#lgSignup'); if (sb) sb.onclick = showSignup;
   if (msg) setLoginErr(msg);
   const u = $('#lgUser'), pw = $('#lgPass');
   u.value = lsGet('tmws.lastUser') || '';
@@ -1325,6 +1330,70 @@ function showLogin(msg){
     } catch (err) { setLoginErr(err.message === 'AUTH_REQUIRED' ? 'เข้าสู่ระบบไม่สำเร็จ ลองอีกครั้ง' : err.message); pw.select(); btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ'; }
   };
 }
+const SU = { list: null, q: '', pick: null };
+// avatar letter: skip Thai leading vowels (แบงค์ → บ, เกมส์ → ก)
+const initial = s => (String(s || '').trim().replace(/^[เแโใไ]+/, '').charAt(0) || '?').toUpperCase();
+function showSignup(){
+  SU.pick = null; SU.q = '';
+  const el = showLoginShell(`<div><b style="font-size:17px">สมัครใช้งาน</b><div class="muted" style="font-size:13px">ขั้นที่ 1 จาก 2 · เลือกชื่อของคุณ</div></div>
+    <div id="suBody"><div class="muted">กำลังโหลดรายชื่อ…</div></div>
+    <button class="ghost" type="button" id="suBack">← กลับไปหน้าเข้าสู่ระบบ</button>`);
+  $('#suBack').onclick = () => { $('#login').innerHTML = ''; showLogin(); };
+  run('signupList').then(l => { SU.list = l; drawSuList(); })
+    .catch(e => { $('#suBody').innerHTML = `<div class="lg-err show">${esc(e.message)}</div>`; });
+}
+function drawSuList(){
+  const box = $('#suBody'); if (!box) return;
+  if (!SU.list.length) { box.innerHTML = '<div class="muted">ทุกคนมีบัญชีแล้ว ถ้าไม่พบชื่อหรือลืมรหัสผ่าน ติดต่อผู้ดูแล</div>'; return; }
+  box.innerHTML = `<input id="suQ" type="search" placeholder="ค้นหาชื่อเล่น" value="${esc(SU.q)}" autocomplete="off">
+    <div class="su-list" id="suNames"></div>
+    <div class="muted" style="font-size:12.5px;margin-top:8px">ไม่พบชื่อ / มีบัญชีอยู่แล้ว? ติดต่อผู้ดูแล</div>`;
+  $('#suQ').oninput = e => { SU.q = e.target.value; drawSuNames(); };
+  drawSuNames();
+}
+function drawSuNames(){
+  const q = SU.q.trim().toLowerCase(), l = SU.list.filter(s => !q || s.nick.toLowerCase().includes(q));
+  const box = $('#suNames'); box.replaceChildren();
+  if (!l.length) { box.append(h('div', { class: 'muted', style: 'padding:10px 2px', text: 'ไม่พบชื่อที่ค้นหา' })); return; }
+  l.forEach(s => box.append(h('button', { type: 'button', class: 'su-name', onclick: () => suPick(s.nick) },
+    h('span', { class: 'me-av sm', text: initial(s.nick) }), h('span', { style: 'flex:1', text: s.nick }), h('span', { class: 'muted', text: '›' }))));
+}
+function suPick(nick){
+  SU.pick = SU.list.find(s => s.nick === nick);
+  if (!SU.pick) return;
+  showLoginShell(`<div><b style="font-size:17px">สมัครใช้งาน</b><div class="muted" style="font-size:13px">ขั้นที่ 2 จาก 2 · ตั้ง Username และรหัสผ่าน</div></div>
+    <div class="me-card"><div class="me-av">${esc(initial(nick))}</div><div><b>${esc(nick)}</b><div><button type="button" class="linkbtn" id="suOther">ไม่ใช่ฉัน · เลือกชื่ออื่น</button></div></div></div>
+    <form id="suForm" novalidate style="display:grid;gap:12px">
+      ${SU.pick.needCode ? '<div class="field"><label for="suC">รหัสพนักงาน (ตามระบบสแกนนิ้ว)</label><input id="suC" type="text" inputmode="numeric" autocomplete="off"></div>' : ''}
+      <div class="field"><label for="suU">Username <span class="muted">(a-z 0-9 . _ - อย่างน้อย 3 ตัว)</span></label><input id="suU" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false"></div>
+      <div class="field"><label for="suP">รหัสผ่าน <span class="muted">(อย่างน้อย 6 ตัว)</span></label><div class="pw"><input id="suP" type="password" autocomplete="new-password"><button type="button" id="suEye">แสดง</button></div></div>
+      <div class="field"><label for="suP2">ยืนยันรหัสผ่าน</label><input id="suP2" type="password" autocomplete="new-password"></div>
+      <label class="rem"><input type="checkbox" id="suR" checked> จดจำการเข้าสู่ระบบในเครื่องนี้ (30 วัน)</label>
+      <div class="lg-err" id="suErr"></div>
+      <button class="primary" type="submit" id="suBtn">สร้างบัญชีและเข้าสู่ระบบ</button>
+    </form>`);
+  $('#suOther').onclick = showSignup;
+  $('#suEye').onclick = () => { const p = $('#suP'), show = p.type === 'password'; p.type = show ? 'text' : 'password'; $('#suEye').textContent = show ? 'ซ่อน' : 'แสดง'; };
+  setTimeout(() => ($('#suC') || $('#suU')).focus(), 50);
+  $('#suForm').onsubmit = async e => {
+    e.preventDefault();
+    const err = m => { const x = $('#suErr'); x.textContent = m; x.classList.toggle('show', !!m); };
+    const u = $('#suU').value.trim(), pw = $('#suP').value;
+    if (SU.pick.needCode && !$('#suC').value.trim()) return err('กรอกรหัสพนักงาน');
+    if (!/^[A-Za-z0-9._-]{3,30}$/.test(u)) return err('Username ใช้ได้เฉพาะ a-z 0-9 . _ - ยาว 3–30 ตัว');
+    if (pw.length < 6) return err('รหัสผ่านต้องยาวอย่างน้อย 6 ตัวอักษร');
+    if (pw !== $('#suP2').value) return err('รหัสผ่านทั้งสองช่องไม่ตรงกัน');
+    const b = $('#suBtn'); b.disabled = true; b.textContent = 'กำลังสร้างบัญชี…'; err('');
+    try {
+      const keep = $('#suR').checked;
+      const r = await run('signup', { nick: SU.pick.nick, code: $('#suC') ? $('#suC').value.trim() : '', username: u, password: pw, remember: keep });
+      saveToken(r.token, keep);
+      lsSet('tmws.lastUser', u);
+      await startApp(await run('getInit', r.token));
+      toast('สร้างบัญชีเรียบร้อย ยินดีต้อนรับ ' + (r.me.name || r.me.username));
+    } catch (ex) { err(ex.message); b.disabled = false; b.textContent = 'สร้างบัญชีและเข้าสู่ระบบ'; }
+  };
+}
 function showSetupNeeded(){
   showLoginShell(`<div class="lg-err show" style="background:var(--warn-soft);color:var(--ink)">ยังไม่มีบัญชีผู้ดูแลระบบ</div>
     <div style="font-size:14px;line-height:1.7">สำหรับเจ้าของระบบ:<br>1. เปิด Google Sheet ของ Stock count<br>2. เมนู <b>2nk Stock count → สร้าง / รีเซ็ตบัญชีผู้ดูแลระบบ</b><br>3. กลับมารีเฟรชหน้านี้ แล้วเข้าสู่ระบบ</div>
@@ -1337,19 +1406,17 @@ function authLost(){
 }
 function renderMe(){
   const b = $('#meBtn'), n = (S.me && (S.me.name || S.me.username)) || '';
-  b.hidden = !S.me; b.textContent = n.trim().charAt(0).toUpperCase() || '?'; b.title = 'บัญชีของฉัน: ' + n;
+  b.hidden = !S.me; b.textContent = initial(n); b.title = 'บัญชีของฉัน: ' + n;
 }
 
 function openUserMenu(){
   const me = S.me || {};
   const md = openModal(`<div class="modal-head">บัญชีของฉัน</div><div class="modal-body">
-    <div class="me-card"><div class="me-av">${esc((me.name || me.username || '?').trim().charAt(0).toUpperCase())}</div>
-      <div><b>${esc(me.name)}</b><div class="muted" style="font-size:13px">@${esc(me.username)} • ${roleBadge(me.role)}${me.src === 'duty' ? ' <span class="role user">บัญชีแอปเวร</span>' : ''}</div></div></div>
+    <div class="me-card"><div class="me-av">${esc(initial(me.name || me.username))}</div>
+      <div><b>${esc(me.name)}</b><div class="muted" style="font-size:13px">@${esc(me.username)} • ${roleBadge(me.role)}</div></div></div>
     <div style="display:grid;gap:8px">
       ${me.role === 'admin' ? '<button class="ghost big" data-users>👥 จัดการผู้ใช้งาน</button>' : ''}
-      ${me.src === 'duty'
-        ? `<a class="ghost big" href="${esc(S.dutyUrl || '#')}" target="_blank" rel="noopener">🔑 เปลี่ยนรหัสผ่าน (ที่แอป 2NK เวรวันเสาร์)</a>`
-        : '<button class="ghost big" data-pw>🔑 เปลี่ยนรหัสผ่าน</button>'}
+      <button class="ghost big" data-pw>🔑 เปลี่ยนรหัสผ่าน</button>
       <button class="ghost big danger" data-out>↪ ออกจากระบบ</button>
     </div></div><div class="modal-foot"><span style="flex:1"></span><button class="ghost" data-x>ปิด</button></div>`);
   $('[data-x]', md.el).onclick = md.close;
@@ -1381,11 +1448,11 @@ async function openUsersAdmin(){
   try { users = await run('listUsers', S.pin); } catch (e) { toast(errMsg(e)); return; }
   const md = openModal(`<div class="modal-head">👥 ผู้ใช้งานระบบ</div><div class="modal-body">
     <div class="muted" style="font-size:13px">เฉพาะผู้ที่มีบัญชีเท่านั้นที่เข้าใช้ Stock Count ได้ • ผู้ดูแลระบบจัดการผู้ใช้ได้ ผู้ใช้งานทั่วไปนับสต๊อกและดูข้อมูลได้ทุกอย่าง</div>
-    ${S.dutyUrl ? `<div class="duty-note">บัญชีที่มีป้าย <b>แอปเวร</b> มาจากชีตพนักงานของ 2NK เวรวันเสาร์ — เพิ่ม/แก้/ปิดใช้งานที่ <a href="${esc(S.dutyUrl)}" target="_blank" rel="noopener">แอปเวร</a> · บัญชีที่เพิ่มในหน้านี้เป็นบัญชีสำรองของ Stock Count</div>` : ''}
+    <div class="muted" style="font-size:13px">พนักงานสมัครเองได้จากหน้าเข้าสู่ระบบ (เลือกชื่อจากรายชื่อพนักงานที่คัดลอกจาก 2NK เวรวันเสาร์) · บัญชีของ Stock Count แยกจากแอปเวร</div>
     <div class="tbl"><table class="utable"><tr><th class="nm">ชื่อผู้ใช้งาน</th><th>ชื่อผู้ใช้ (login)</th><th>สิทธิ์</th><th>เข้าใช้ล่าสุด</th><th></th></tr>
-      ${users.map(u => `<tr><td class="nm"><b>${esc(u.name)}</b>${u.src === 'duty' ? ' <span class="role user">แอปเวร</span>' : ''}${u.active ? '' : ' <span class="off">ปิดใช้งาน</span>'}<span class="sub">@${esc(u.username)} · ${u.last_login ? 'เข้าใช้ ' + esc(fmtTime(u.last_login)) : 'ยังไม่เคยเข้าใช้'}</span></td><td>${esc(u.username)}</td>
+      ${users.map(u => `<tr><td class="nm"><b>${esc(u.name)}</b>${u.created_by && /^สมัครเอง/.test(u.created_by) ? ' <span class="role user">สมัครเอง</span>' : ''}${u.active ? '' : ' <span class="off">ปิดใช้งาน</span>'}<span class="sub">@${esc(u.username)} · ${u.last_login ? 'เข้าใช้ ' + esc(fmtTime(u.last_login)) : 'ยังไม่เคยเข้าใช้'}</span></td><td>${esc(u.username)}</td>
         <td>${roleBadge(u.role)}</td><td class="muted">${u.last_login ? esc(fmtTime(u.last_login)) : 'ยังไม่เคย'}</td>
-        <td>${u.src === 'duty' ? '' : `<button class="ghost" data-edit="${esc(u.username)}">แก้ไข</button>`}</td></tr>`).join('')}
+        <td><button class="ghost" data-edit="${esc(u.username)}">แก้ไข</button></td></tr>`).join('')}
     </table></div>
   </div><div class="modal-foot"><button class="ghost solid" data-add>＋ เพิ่มผู้ใช้</button><span style="flex:1"></span><button class="ghost" data-x>ปิด</button></div>`, true);
   $('[data-x]', md.el).onclick = md.close;
@@ -1464,7 +1531,7 @@ async function boot(){
   let b;
   try { b = await run('bootstrap'); }
   catch (e) { showLoginShell(`<div class="lg-err show">เชื่อมต่อระบบไม่สำเร็จ: ${esc(e.message)}</div><button class="primary" type="button" onclick="location.reload()">ลองใหม่</button>`); return; }
-  S.version = b.version; S.dutyUrl = b.dutyUrl || '';
+  S.version = b.version; S.canSignup = !!b.signup;
   if (b.needSetup) { showSetupNeeded(); return; }
   if (S.pin) { try { return await startApp(await run('getInit', S.pin)); } catch (e) { /* expired → login */ } }
   saveToken('', false);
