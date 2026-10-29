@@ -87,6 +87,9 @@ button.ghost.danger{color:var(--bad);border-color:var(--bad)}
 .sugg mark{background:var(--warn-soft);color:inherit;border-radius:3px}
 .sugg .none{padding:10px 12px;color:var(--muted);font-size:14px}
 .prod.new{background:var(--warn-soft)}
+.prod .live{font-size:14px;overflow-wrap:anywhere}
+.prod .live b{font-size:17px}
+.prod .live button.ghost{padding:3px 10px;margin-left:4px}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{font:inherit;font-size:13px;padding:4px 10px;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;display:inline-flex;gap:6px;align-items:center}
 .chip b{font-family:var(--f-mono);font-weight:600}
@@ -581,12 +584,43 @@ function afterSelect(){
   $('#code').value = ''; $('#sugg').hidden = true; $('#scanMsg').textContent = '';
   S.confirmKey = null; $('#warn').replaceChildren();
   renderProd();
+  loadLiveStock(S.sel);
   try { navigator.vibrate && navigator.vibrate(40); } catch {}
   (S.sel.isNew ? $('#pname') : $('#qty')).focus();
 }
 function clearSel(){ S.sel = null; $('#pname').value = ''; renderProd(); $('#code').focus(); }
 
 function countsFor(key){ return S.counts.filter(c => !c.void && canon(c) === key); }
+
+// current stock in JST for the product being counted = the "สินค้าคงคลัง" column (Qty), nothing deducted for locks
+const LIVE = new Map(); // product key → {state: 'loading'|'ok'|'none'|'err', qty, bins, at, msg}
+async function loadLiveStock(sel){
+  if (!sel || sel.isNew) return;
+  const key = sel.key, q = sel.sku || sel.barcode, cur = LIVE.get(key);
+  if (!q || (cur && (cur.state === 'loading' || (cur.state !== 'err' && Date.now() - cur.at < 120e3)))) return;
+  LIVE.set(key, { state: 'loading', at: Date.now() });
+  if (S.sel && S.sel.key === key) renderProd();
+  try {
+    const r = await run('jstSearch', q, S.pin);
+    const row = r.rows.find(x => sel.sku && x.sku === sel.sku) || r.rows.find(x => sel.barcode && x.barcode === sel.barcode) || (r.rows.length === 1 ? r.rows[0] : null);
+    LIVE.set(key, row ? { state: 'ok', qty: row.qty, bins: row.bins || [], at: r.at } : { state: 'none', at: Date.now() });
+  } catch (e) {
+    LIVE.set(key, { state: 'err', at: Date.now(), msg: e.message === 'JST_CAPTCHA' ? 'JST ขอ CAPTCHA — ให้หัวหน้าล็อกอินเว็บ JST 1 ครั้ง' : errMsg(e) });
+  }
+  if (S.sel && S.sel.key === key) renderProd();
+}
+function liveStockLine(sel){
+  if (sel.isNew) return null;
+  const s = LIVE.get(sel.key);
+  if (!s || s.state === 'loading') return h('div', { class: 'live muted', text: 'กำลังดึงสต๊อกจาก JST…' });
+  if (s.state === 'none') return h('div', { class: 'live muted', text: 'สต๊อก JST: ไม่พบสินค้านี้ใน JST' });
+  if (s.state === 'err') return h('div', { class: 'live muted' }, 'สต๊อก JST: ดึงไม่ได้ (' + s.msg + ') ',
+    h('button', { type: 'button', class: 'ghost', text: 'ลองใหม่', onclick: () => { LIVE.delete(sel.key); loadLiveStock(sel); } }));
+  const bins = s.bins.slice(0, 3).map(b => b.bin + ' ' + num(b.qty)).join(' · ');
+  return h('div', { class: 'live' }, 'สต๊อก JST ตอนนี้ ', h('b', { class: 'mono', text: num(s.qty) }), ' ชิ้น',
+    bins ? h('span', { class: 'muted', text: ' · ' + bins }) : null,
+    h('span', { class: 'muted', text: ' · ณ ' + hhmm(s.at) + ' น.' }));
+}
 function renderProd(){
   const box = $('#prodBox'); box.replaceChildren();
   const sel = S.sel;
@@ -604,6 +638,7 @@ function renderProd(){
         h('div', { class: 'pname', text: sel.isNew ? 'สินค้าใหม่ (ไม่มีในฐานข้อมูล)' : (sel.name || '(ไม่มีชื่อในฐานข้อมูล)') }),
         h('div', { class: 'meta', text: [sel.sku ? 'SKU ' + sel.sku : (sel.isNew ? 'รหัส ' + sel.key : 'ไม่มี SKU'), sel.barcode && 'BC ' + sel.barcode].filter(Boolean).join(' · ') })),
       h('button', { type: 'button', class: 'ghost', text: 'เปลี่ยนสินค้า', onclick: clearSel })),
+    liveStockLine(sel),
     rows.length
       ? h('div', {}, 'รอบนี้นับแล้ว ', h('b', { class: 'mono', text: num(total) }), ` ชิ้น จาก ${rows.length} ครั้ง` + (locs.length ? ` · ${locs.join(', ')}` : ''))
       : h('div', { class: 'muted', text: 'ยังไม่มีใครนับตัวนี้ในรอบนี้' }),
