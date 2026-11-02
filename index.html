@@ -142,8 +142,8 @@ nav.tabs button svg{width:22px;height:22px}
 nav.tabs button[aria-current=page]{color:var(--accent)}
 #toast{position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:600;font-size:14px;max-width:calc(100% - 32px);z-index:20;box-shadow:0 6px 20px rgb(0 0 0 / .25)}
 @media (prefers-reduced-motion:no-preference){#toast:not([hidden]){animation:pop .18s ease-out}@keyframes pop{from{transform:translate(-50%,8px);opacity:0}}}
-/* while typing: hide the bottom bar and leave room so the focused field can scroll above the keyboard */
-body.typing nav.tabs{display:none}
+/* while typing: leave room so the focused field can scroll above the keyboard
+   (the bottom bar stays on screen — ผู้ใช้สั่ง 2 พ.ย.: hiding it while a field kept focus made it come and go) */
 body.typing .wrap{padding-bottom:60vh}
 .who{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted)}
 .who b{color:var(--ink);font-size:15px}
