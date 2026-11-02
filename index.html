@@ -426,7 +426,7 @@ button.primary.ho-start{width:100%;font-size:20px;padding:18px}
           </div>
         </form>
         <p id="hoMsg" class="hint">สแกนบาร์โค้ดเลขพัสดุบนใบปะหน้าทุกกล่องที่ส่งออก · กล้องสแกนต่อเนื่องได้ไม่ต้องกดใหม่</p>
-        <p class="hint ok" style="margin-top:-4px">✓ บันทึกเข้ารายงานทันทีทุกครั้งที่สแกน ไม่ต้องกดยืนยัน — สแกนเสร็จปิดแอปหรือกด ← กลับ ได้เลย</p>
+        <p class="hint ok" style="margin-top:-4px">✓ รับเฉพาะเลข tracking / เลข order ที่เจอใน JST · บันทึกเข้ารายงานทันที ไม่ต้องกดยืนยัน — สแกนเสร็จปิดแอปหรือกด ← กลับ ได้เลย</p>
         <button type="button" class="ghost" id="hoClose" disabled>✍ ให้คนรถเซ็นรับ (ไม่บังคับ — เก็บเป็นหลักฐาน)</button>
         <button type="button" class="ghost danger" id="hoCancel" hidden>ยกเลิกรอบนี้</button>
       </div>
@@ -1918,9 +1918,13 @@ async function hoPump(){
       catch (e) {
         if (e.message === 'AUTH_REQUIRED') { authLost(); break; }
         if (e.message === 'เชื่อมต่อไม่ได้') { await new Promise(r => setTimeout(r, 3000)); continue; } // no signal: keep it queued and retry
-        p.state = 'error'; p.err = errMsg(e);
-        if (/สแกนไปแล้ว/.test(p.err)) hoFeedback('dup', 'สแกนซ้ำ', p.err.replace(/^\S+\s*/, ''), 'สแกนซ้ำ');
-        else hoFeedback('bad', 'ไม่ได้บันทึก', p.err, 'ไม่ได้บันทึก');
+        const m = e.message || '';
+        // only numbers found in JST (tracking or order number) are taken: refused scans leave the list, nothing is saved
+        const drop = () => { HO.items = HO.items.filter(x => x !== p); };
+        if (/^HO_NOT_FOUND/.test(m)) { drop(); hoFeedback('bad', 'ไม่พบเลข tracking / เลข order', p.tracking + ' · ไม่ได้บันทึก', 'ไม่พบเลขพัสดุ'); }
+        else if (/^HO_JST_DOWN/.test(m)) { drop(); hoFeedback('warn', 'เช็ก JST ไม่ได้ — สแกนใหม่อีกครั้ง', p.tracking + ' · ไม่ได้บันทึก', 'สแกนใหม่'); }
+        else if (/สแกนไปแล้ว/.test(m)) { drop(); hoFeedback('dup', 'สแกนซ้ำ', m.replace(/^\S+\s*/, ''), 'สแกนซ้ำ'); }
+        else { p.state = 'error'; p.err = errMsg(e); hoFeedback('bad', 'ไม่ได้บันทึก', p.err, 'ไม่ได้บันทึก'); }
       }
       if (HO.cur === cur) renderHoScan();
     }
