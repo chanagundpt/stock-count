@@ -412,8 +412,8 @@ button.primary.ho-start{width:100%;font-size:20px;padding:18px}
             </button>
           </div>
         </form>
-        <p id="hoMsg" class="hint">สแกนบาร์โค้ดเลขพัสดุบนใบปะหน้าทุกกล่องที่ยกให้ขนส่ง · กล้องสแกนต่อเนื่องได้ไม่ต้องกดใหม่</p>
-        <button type="button" class="primary" id="hoDone">✓ เสร็จแล้ว</button>
+        <p id="hoMsg" class="hint">สแกนบาร์โค้ดเลขพัสดุบนใบปะหน้าทุกกล่องที่ส่งออก · กล้องสแกนต่อเนื่องได้ไม่ต้องกดใหม่</p>
+        <p class="hint ok" style="margin-top:-4px">✓ บันทึกเข้ารายงานทันทีทุกครั้งที่สแกน ไม่ต้องกดยืนยัน — สแกนเสร็จปิดแอปหรือกด ← กลับ ได้เลย</p>
         <button type="button" class="ghost" id="hoClose" disabled>✍ ให้คนรถเซ็นรับ (ไม่บังคับ — เก็บเป็นหลักฐาน)</button>
         <button type="button" class="ghost danger" id="hoCancel" hidden>ยกเลิกรอบนี้</button>
       </div>
@@ -1613,7 +1613,7 @@ function openUserForm(u){
 $('#meBtn').addEventListener('click', openUserMenu);
 
 // ---------- ส่งมอบพัสดุให้ขนส่ง ----------
-// สแกนทุกกล่องตอนยกให้ขนส่ง → คนรถเซ็น + ถ่ายรูป = ใบส่งมอบ; ระบบเช็กกับ JST ทุกชั่วโมงว่าขนส่งสแกนรับแล้วหรือยัง
+// สแกนทุกกล่องตอนยกให้ขนส่ง → คนรถเซ็น + ถ่ายรูป = ใบส่งมอบ; ระบบเช็กกับ JST ทุก 15 นาทีว่าขนส่งสแกนรับแล้วหรือยัง
 // การสแกนส่งเข้าคิวทีละรายการ (ไม่ต้องรอเซิร์ฟเวอร์ตอบก่อนสแกนกล่องถัดไป)
 const HO = { list: null, loading: false, err: '', cur: null, items: [], pumping: false, listAt: 0, msg: null,
   tab: 'home', rep: null, repLoading: false, f: { days: 7, carrier: '', shop: '', status: '', q: '' } };
@@ -1667,7 +1667,7 @@ function renderHo(){
       <div class="t2"><span style="color:var(--ok)">ขนส่งรับแล้ว ${num(g.collected)}</span> · <span style="color:var(--warn)">ยังไม่ยืนยัน ${num(g.waiting)}</span></div></div>
       <span class="qty">${num(g.n)}</span></div>`).join('') + `</div>` : `<div class="empty">วันนี้ยังไม่ได้สแกน</div>`);
   html += `<div class="ho-check">${ck ? (ck.ok ? `เช็กกับ JST ล่าสุด ${hoTime(ck.at)} · รอยืนยัน ${num(ck.pending)} กล่อง${ck.complete === false ? ' (ยังเช็กไม่ครบ จะเช็กต่อรอบหน้า)' : ''}`
-      : `<span class="bad">เช็กกับ JST ไม่สำเร็จ ${hoTime(ck.at)}: ${esc(ck.error)}</span>`) : 'ยังไม่เคยเช็กกับ JST (ระบบเช็กเองทุกชั่วโมง 08:00–20:00)'}
+      : `<span class="bad">เช็กกับ JST ไม่สำเร็จ ${hoTime(ck.at)}: ${esc(ck.error)}</span>`) : 'ยังไม่เคยเช็กกับ JST (ระบบเช็กเองทุก 15 นาที 08:00–21:00)'}
       <button class="ghost" data-act="check">เช็กตอนนี้</button></div>
     <p class="hint" style="margin-top:8px">ดูย้อนหลัง/กรองตามขนส่ง ช่องทางขาย สถานะ ได้ที่แท็บ "รายงาน"</p>`;
   if (HO.err) html += `<p class="hint bad">${esc(HO.err)}</p>`;
@@ -1866,7 +1866,6 @@ function renderHoScan(){
   const close = $('#hoClose');
   close.disabled = !n || sending > 0 || bad > 0;
   close.textContent = sending ? `กำลังบันทึก ${sending} รายการ…` : bad ? `เอารายการสีแดงออกก่อน (${bad})` : `✍ ให้คนรถเซ็นรับ (ไม่บังคับ — เก็บเป็นหลักฐาน)`;
-  $('#hoDone').textContent = sending ? `กำลังบันทึก ${sending} รายการ…` : `✓ เสร็จแล้ว (${num(n)} กล่อง)`;
   $('#hoCancel').hidden = true;
 }
 async function hoDel(p, btn){
@@ -1886,11 +1885,7 @@ $('#hoCancel').addEventListener('click', async () => {
   try { await run('hoCancel', S.pin, HO.cur.id); toast('ยกเลิกรอบแล้ว'); hoBack(); } catch (e) { toast(errMsg(e)); }
 });
 $('#hoClose').addEventListener('click', () => hoCloseDlg());
-$('#hoDone').addEventListener('click', () => {
-  // scans still being sent keep going in the background; leaving is safe (each scan is already the record)
-  if (HO.items.some(p => p.state === 'sending')) toast('กำลังบันทึกรายการที่เหลือ…');
-  hoBack();
-});
+
 
 // ---- ส่งมอบ: คนรถนับ + เซ็น + ถ่ายรูป ----
 function hoCloseDlg(){
