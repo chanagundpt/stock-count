@@ -1727,6 +1727,7 @@ function renderHo(){
   if (!L) { if (hoPaint(el, HO.err ? `<div class="warnbox bad">${esc(HO.err)}</div><p><button class="ghost" data-act="reload">ลองใหม่</button></p>` : '<div class="empty">กำลังโหลด…</div>')) hoBind(el); if (!HO.err) hoLoad(true); return; }
   const st = L.stats || { today: 0, waiting: 0 }, ck = L.check;
   let html = hoTabs() + `<button class="primary ho-start" type="button" data-act="start">📷 เริ่มสแกน</button>
+    <button class="ghost ho-start" type="button" data-act="sign" style="margin-top:8px">✍ ให้คนรถเซ็นรับ (ไม่บังคับ — เก็บเป็นหลักฐาน)</button>
     <p class="hint" style="text-align:center;margin:6px 0 14px">สแกนใบปะหน้าทุกกล่องที่ออกไปให้ขนส่ง ไม่ต้องแยกขนส่ง · ระบบเช็กกับ JST เองว่าขนส่งรับไปแล้วหรือยัง</p>
     <div class="kpis ho-kpis">
       <div class="kpi" data-act="go" data-go='{"days":1}' role="button" tabindex="0"><div class="v">${num(st.today)}</div><div class="l">สแกนวันนี้ (กล่อง)</div></div>
@@ -1866,6 +1867,7 @@ function hoBind(el){
   el.querySelectorAll('[data-act]').forEach(b => b.onclick = () => {
     const id = b.dataset.id, a = b.dataset.act;
     if (a === 'start') hoQuickStart(b);
+    else if (a === 'sign') hoSignStart(b);
     else if (a === 'tab') { HO.tab = b.dataset.tab; renderHo(); if (HO.tab === 'report') hoReportLoad(); }
     else if (a === 'go') hoGoReport(JSON.parse(b.dataset.go));
     else if (a === 'stat') { HO.f.status = HO.f.status === b.dataset.stat ? '' : b.dataset.stat; renderHo(); }
@@ -1905,6 +1907,18 @@ async function hoQuickStart(btn){
     renderHo(); window.scrollTo(0, 0);
     scanFor = 'ho'; openScanner(); hoReloadCur();
   } catch (e) { toast(errMsg(e)); btn.disabled = false; btn.textContent = '📷 เริ่มสแกน'; }
+}
+// driver sign-off from the home screen: open today's round (no camera) and go straight to the signature form
+async function hoSignStart(btn){
+  const label = btn.textContent; btn.disabled = true; btn.textContent = 'กำลังโหลด…';
+  try {
+    HO.cur = await run('hoStart', S.pin, ''); HO.items = []; HO.msg = null; HO.listAt = 0;
+    renderHo(); window.scrollTo(0, 0);
+    await hoReloadCur();
+    if (!HO.cur) return;
+    if (hoCount()) hoCloseDlg(); else toast('วันนี้ยังไม่มีพัสดุที่สแกน — สแกนก่อนแล้วค่อยให้คนรถเซ็น');
+  } catch (e) { toast(errMsg(e)); }
+  finally { btn.disabled = false; btn.textContent = label; }
 }
 const hoTabs = () => `<div class="seg ho-tabs" role="tablist">${[['home', 'ส่งมอบ'], ['report', 'รายงาน']].map(([k, t]) =>
   `<button type="button" data-act="tab" data-tab="${k}" aria-pressed="${HO.tab === k}">${t}</button>`).join('')}</div>`;
