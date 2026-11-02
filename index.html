@@ -211,6 +211,10 @@ button.ghost:disabled{opacity:.5}
 .role{display:inline-block;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:600}
 .role.admin{background:linear-gradient(135deg,#a78bfa,#7c3aed);color:#fff}
 .role.user{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
+.role.handover{background:var(--warn-soft);color:var(--warn)}
+body.ho-only nav.tabs,body.ho-only #roundChip,body.ho-only #sync{display:none!important}
+body.ho-only .wrap{padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
+.ho-only-name{margin-left:auto;font-size:13px;font-weight:600;color:var(--muted)}
 .off{color:var(--bad);font-size:12px;font-weight:600}
 .me-card{display:flex;gap:12px;align-items:center;padding:4px 0 6px}
 .me-av{width:44px;height:44px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;flex:none}
@@ -574,6 +578,7 @@ function toast(msg){ const t = $('#toast'); t.textContent = msg; t.hidden = fals
 
 // ---------- views ----------
 function setView(v){
+  if (hoOnly()) v = 'ho';
   S.view = v;
   for (const id of ['count','ho','sum','jst','exp','rounds']) $('#v-' + id).hidden = id !== v;
   document.querySelectorAll('nav.tabs button').forEach(b => { if (b.dataset.v === v) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
@@ -815,13 +820,32 @@ async function decodeCanvas(cv, ctx){
 }
 const scanStatus = t => { $('#scanStatus').textContent = t; };
 let stream = null, scanning = false, track = null, zoomSteps = [], zoomIdx = 0, torchOn = false, audio = null;
-function beep(){
-  try {
-    const o = audio.createOscillator(), g = audio.createGain();
-    o.frequency.value = 1800; g.gain.value = .15; o.connect(g); g.connect(audio.destination);
-    o.start(); o.stop(audio.currentTime + .09);
-  } catch {}
+function beep(){ sfx('tick'); }
+// scan sounds: tick = barcode read · ok = saved (and found in JST) · warn = saved but check it (not in JST / other courier) · bad = refused
+const SFX = {
+  tick: [[1800, .07, 'square', .08]],
+  ok: [[1320, .09, 'sine', .22], [1760, .14, 'sine', .22]],
+  warn: [[880, .14, 'triangle', .3], [0, .06], [880, .14, 'triangle', .3]],
+  bad: [[220, .38, 'sawtooth', .22]],
+};
+function ensureAudio(){
+  try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); if (audio.state === 'suspended') audio.resume(); } catch {}
+  return audio;
 }
+function sfx(kind){
+  const a = ensureAudio(); if (!a) return;
+  try {
+    let t = a.currentTime + .01;
+    for (const [f, d, type, vol] of SFX[kind] || []) {
+      if (f) { const o = a.createOscillator(), g = a.createGain(); o.type = type; o.frequency.value = f;
+        g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.001, t + d); o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + d); }
+      t += d;
+    }
+  } catch {}
+  try { navigator.vibrate && navigator.vibrate(kind === 'bad' ? [90, 60, 90] : kind === 'warn' ? [60, 40, 60] : 40); } catch {}
+}
+// phones only allow sound after a tap: unlock it on the first touch
+document.addEventListener('pointerdown', () => ensureAudio(), { once: true });
 async function openScanner(){
   $('#scanner').hidden = false; $('#scanBox').hidden = true; $('#photoBtn').hidden = true;
   $('#zoomBtn').hidden = true; $('#torchBtn').hidden = true; $('#scanBox').classList.remove('hit');
@@ -887,7 +911,7 @@ async function scanLoop(){
       if (code && scanning && scanFor === 'ho') {
         if (code !== lastHoCode || Date.now() - lastHoAt > 3000) {
           lastHoCode = code;
-          if (hoAdd(code)) { beep(); $('#scanBox').classList.add('hit'); setTimeout(() => $('#scanBox').classList.remove('hit'), 250); }
+          if (hoAdd(code)) { $('#scanBox').classList.add('hit'); setTimeout(() => $('#scanBox').classList.remove('hit'), 250); }
           scanStatus((HO.msg && HO.msg.text) || '');
         }
         lastHoAt = Date.now();
@@ -995,6 +1019,7 @@ function errMsg(e){
   const m = (e && e.message) || '';
   if (m === 'AUTH_REQUIRED') { setTimeout(authLost, 0); return 'หมดเวลาเข้าสู่ระบบ กรุณาเข้าสู่ระบบอีกครั้ง'; }
   if (m === 'ADMIN_INVALID') return 'รหัสผู้ดูแลไม่ถูกต้อง ทำรายการไม่สำเร็จ';
+  if (m === 'NO_PERMISSION') return 'บัญชีนี้ (ผู้ส่งมอบสินค้า) ใช้ได้เฉพาะแท็บส่งมอบ';
   return m || 'เชื่อมต่อไม่ได้ ลองอีกครั้ง';
 }
 
@@ -1330,7 +1355,10 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&a
 const ssGet = k => { try { return sessionStorage.getItem(k); } catch { return null; } };
 const ssSet = (k, v) => { try { v == null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, v); } catch {} };
 function saveToken(t, remember){ S.pin = t || ''; lsSet('tmws.token', remember && t ? t : ''); ssSet('tmws.token', t || null); }
-const roleBadge = r => `<span class="role ${r === 'admin' ? 'admin' : 'user'}">${r === 'admin' ? 'ผู้ดูแลระบบ' : 'ผู้ใช้งาน'}</span>`;
+const ROLE_NAME = { admin: 'ผู้ดูแลระบบ', user: 'ผู้ใช้งาน', handover: 'ผู้ส่งมอบสินค้า' };
+const roleBadge = r => `<span class="role ${ROLE_NAME[r] ? r : 'user'}">${ROLE_NAME[r] || ROLE_NAME.user}</span>`;
+// ผู้ส่งมอบสินค้า: sees and uses only the handover tab (the server refuses everything else too)
+const hoOnly = () => !!(S.me && S.me.role === 'handover');
 const LOGO = () => ($('.logo img') || {}).src || '';
 
 function openModal(html, wide){
@@ -1541,9 +1569,10 @@ function openUserForm(u){
     <div class="field"><label>${isNew ? 'รหัสผ่าน * (อย่างน้อย 6 ตัว)' : 'ตั้งรหัสผ่านใหม่ (เว้นว่าง = ไม่เปลี่ยน)'}</label>
       <div class="pw"><input id="ufPass" type="text" autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="${isNew ? '' : 'เว้นว่างถ้าไม่เปลี่ยน'}"><button type="button" id="ufGen">สุ่ม</button></div></div>
     <div class="grid2 keep">
-      <div class="field"><label for="ufRole">สิทธิ์</label><select id="ufRole"><option value="user" ${u.role !== 'admin' ? 'selected' : ''}>ผู้ใช้งาน</option><option value="admin" ${u.role === 'admin' ? 'selected' : ''}>ผู้ดูแลระบบ</option></select></div>
+      <div class="field"><label for="ufRole">สิทธิ์</label><select id="ufRole">${['user', 'handover', 'admin'].filter(r => r !== 'handover' || (S.version || '') >= '2026-11-02.3' || u.role === r).map(r => `<option value="${r}" ${(ROLE_NAME[u.role] ? u.role : 'user') === r ? 'selected' : ''}>${ROLE_NAME[r]}</option>`).join('')}</select></div>
       <div class="field"><label>สถานะ</label><label class="rem" style="padding:10px 0"><input type="checkbox" id="ufActive" ${u.active ? 'checked' : ''}> เปิดใช้งาน</label></div>
     </div>
+    <div class="muted" style="font-size:13px">ผู้ส่งมอบสินค้า = เห็นและใช้ได้เฉพาะแท็บส่งมอบ (สแกนพัสดุให้ขนส่ง) ไม่เห็นการนับสต๊อก/สต๊อก JST</div>
     <div class="muted" style="font-size:13px">แจ้งชื่อผู้ใช้และรหัสผ่านให้เจ้าของบัญชีโดยตรง — ระบบเก็บรหัสแบบเข้ารหัส ไม่มีใครดูรหัสจริงย้อนหลังได้ ถ้าลืม ให้ตั้งรหัสใหม่ที่หน้านี้</div>
   </div><div class="modal-foot">${isNew ? '' : '<button class="ghost danger" data-del>🗑 ลบผู้ใช้</button>'}<span style="flex:1"></span><button class="ghost" data-x>ยกเลิก</button><button class="ghost solid" data-ok>บันทึก</button></div>`);
   $('#ufGen', md.el).onclick = () => { $('#ufPass', md.el).value = randomPassword(); };
@@ -1681,8 +1710,9 @@ async function hoReloadCur(){
     if (HO.cur !== cur) return;
     HO.cur = Object.assign(cur, r.handover);
     // keep this phone's scans that are still being sent or were refused; the rest comes from the server (other phones' scans too)
-    const local = HO.items.filter(p => p.state === 'sending' || p.state === 'error');
-    HO.items = local.concat(r.parcels.filter(p => !p.void && !local.some(l => l.tracking === p.tracking)));
+    const local = HO.items.filter(p => p.state === 'sending' || p.state === 'error'), warns = {};
+    HO.items.forEach(p => { if (p.warn) warns[p.tracking] = p.warn; });
+    HO.items = local.concat(r.parcels.filter(p => !p.void && !local.some(l => l.tracking === p.tracking)).map(p => Object.assign(p, { warn: warns[p.tracking] || null })));
     if (HO.cur.status !== 'open') { toast(HO.cur.status === 'closed' ? 'รอบนี้ส่งมอบแล้ว' : 'รอบนี้ถูกยกเลิกแล้ว'); hoBack(); return; }
   } catch (e) { if (e.message === 'AUTH_REQUIRED') authLost(); }
   renderHoScan();
@@ -1693,15 +1723,28 @@ function hoSay(cls, text){ HO.msg = { cls, text }; const m = $('#hoMsg'); if (m)
 /** returns true when the code was taken (new parcel) */
 function hoAdd(raw){
   const t = norm(raw).replace(/[^A-Z0-9-]/g, '');
-  try { navigator.vibrate && navigator.vibrate(60); } catch {}
-  if (!/^[A-Z0-9-]{8,40}$/.test(t)) { hoSay('bad', `"${raw}" ไม่ใช่เลขพัสดุ — สแกนบาร์โค้ดเลขพัสดุบนใบปะหน้า`); return false; }
-  if (S.byCode.has(t)) { hoSay('bad', `${t} เป็นบาร์โค้ดสินค้า ไม่ใช่เลขพัสดุ — สแกนบาร์โค้ดบนใบปะหน้า`); return false; }
-  if (HO.items.some(p => p.tracking === t && p.state !== 'error')) { hoSay('warn', `${t} สแกนไปแล้วในรอบนี้`); return false; }
+  if (!/^[A-Z0-9-]{8,40}$/.test(t)) { sfx('bad'); hoSay('bad', `"${raw}" ไม่ใช่เลขพัสดุ — สแกนบาร์โค้ดเลขพัสดุบนใบปะหน้า`); return false; }
+  if (S.byCode.has(t)) { sfx('bad'); hoSay('bad', `${t} เป็นบาร์โค้ดสินค้า ไม่ใช่เลขพัสดุ — สแกนบาร์โค้ดบนใบปะหน้า`); return false; }
+  if (HO.items.some(p => p.tracking === t && p.state !== 'error')) { sfx('bad'); hoSay('bad', `${t} สแกนไปแล้วในรอบนี้`); return false; }
+  sfx('tick');
   HO.items = HO.items.filter(p => p.tracking !== t);
   HO.items.unshift({ id: 'tmp-' + t, tracking: t, at: Date.now(), by: myName(), state: 'sending' });
   hoSay('ok', `✓ ${t} · รวม ${num(hoCount())} กล่อง`);
   renderHoScan(); hoPump();
   return true;
+}
+// what the JST lookup at scan time says about this parcel (null = nothing to warn about, or JST not searched)
+const CARRIER_KEYS = [['flash', /flash/i], ['kerry', /kerry|kex/i], ['jt', /j\s*&\s*t|jnt/i], ['spx', /spx|shopee/i], ['lex', /lazada|lex\b/i],
+  ['post', /ไปรษณีย์|thailand\s*post|thai\s*post|ems/i], ['ninja', /ninja/i], ['dhl', /dhl/i], ['best', /best/i]];
+const carrierKey = n => { const k = CARRIER_KEYS.find(([, re]) => re.test(n || '')); return k ? k[0] : ''; };
+function hoJstWarn(j, carrier){
+  if (!j) return null;
+  if (j.error) return { text: 'ยังเช็กกับ JST ไม่ได้ (' + j.error + ') — ระบบจะเช็กให้เองภายหลัง' };
+  if (!j.found) return { text: 'ไม่พบเลขพัสดุนี้ในออเดอร์ JST — ตรวจใบปะหน้า' };
+  if (/cancel/i.test(j.status || '')) return { bad: true, text: 'ออเดอร์นี้ถูกยกเลิกใน JST — แยกกล่องนี้ไว้ อย่าส่ง' };
+  const a = carrierKey(j.carrier), b = carrierKey(carrier);
+  if (a && b && a !== b) return { text: 'JST ระบุขนส่ง ' + j.carrier + ' ไม่ใช่ ' + carrier + ' — ตรวจว่าส่งถูกเจ้า' };
+  return null;
 }
 async function hoPump(){
   if (HO.pumping) return; HO.pumping = true;
@@ -1709,11 +1752,15 @@ async function hoPump(){
     for (;;) {
       const cur = HO.cur, p = cur && HO.items.slice().reverse().find(x => x.state === 'sending'); // oldest first
       if (!p) break;
-      try { Object.assign(p, await run('hoScan', S.pin, cur.id, p.tracking), { state: '' }); }
+      try {
+        Object.assign(p, await run('hoScan', S.pin, cur.id, p.tracking), { state: '' });
+        p.warn = hoJstWarn(p.jstLookup, cur.carrier);
+        if (p.warn) { sfx(p.warn.bad ? 'bad' : 'warn'); hoSay(p.warn.bad ? 'bad' : 'warn', `${p.tracking}: ${p.warn.text}`); } else sfx('ok');
+      }
       catch (e) {
         if (e.message === 'AUTH_REQUIRED') { authLost(); break; }
         if (e.message === 'เชื่อมต่อไม่ได้') { await new Promise(r => setTimeout(r, 3000)); continue; } // no signal: keep it queued and retry
-        p.state = 'error'; p.err = errMsg(e); hoSay('bad', p.err);
+        p.state = 'error'; p.err = errMsg(e); hoSay('bad', p.err); sfx('bad');
       }
       if (HO.cur === cur) renderHoScan();
     }
@@ -1726,8 +1773,10 @@ function renderHoScan(){
     <div class="ho-n"><span class="mono">${num(n)}</span><small>กล่อง</small></div>`;
   if (HO.msg) { const m = $('#hoMsg'); m.className = 'hint ' + HO.msg.cls; m.textContent = HO.msg.text; }
   $('#hoList').innerHTML = HO.items.length ? `<div class="list">` + HO.items.map(p => `<div class="item${p.state === 'error' ? ' ho-err' : ''}"><div class="main">
-      <div class="t1"><b class="mono">${esc(p.tracking)}</b>${p.state === 'sending' ? '<span class="pill none">กำลังบันทึก…</span>' : p.state === 'error' ? '<span class="pill bad">ไม่ได้บันทึก</span>' : ''}</div>
-      <div class="t2">${p.state === 'error' ? esc(p.err) : `${hoTime(p.at)} · ${esc(p.by)}`}</div></div>
+      <div class="t1"><b class="mono">${esc(p.tracking)}</b>${p.state === 'sending' ? '<span class="pill none">กำลังบันทึก…</span>' : p.state === 'error' ? '<span class="pill bad">ไม่ได้บันทึก</span>'
+        : p.warn ? `<span class="pill ${p.warn.bad ? 'bad' : 'warn'}">${p.warn.bad ? 'ยกเลิกใน JST' : 'ตรวจสอบ'}</span>` : p.orderId ? '<span class="pill ok">พบใน JST</span>' : ''}</div>
+      <div class="t2">${p.state === 'error' ? esc(p.err) : `${hoTime(p.at)} · ${esc(p.by)}${p.orderId ? ' · ออเดอร์ ' + esc(p.orderId) : ''}`}</div>
+      ${p.warn && p.state !== 'error' ? `<div class="t2" style="color:var(--${p.warn.bad ? 'bad' : 'warn'})">${esc(p.warn.text)}</div>` : ''}</div>
       ${p.state === 'sending' ? '' : `<button class="ghost${p.state === 'error' ? '' : ' danger'}" data-del="${esc(p.id)}">${p.state === 'error' ? 'เอาออก' : 'ลบ'}</button>`}</div>`).join('') + `</div>`
     : `<div class="empty">ยังไม่ได้สแกน — สแกนบาร์โค้ดเลขพัสดุบนใบปะหน้าทีละกล่อง</div>`;
   $('#hoList').querySelectorAll('[data-del]').forEach(b => b.onclick = () => hoDel(HO.items.find(p => p.id === b.dataset.del), b));
@@ -1916,6 +1965,7 @@ async function refresh(force){
   if (busy) return; busy = true;
   try {
     if (!S.me) return;
+    if (hoOnly()) { S.ready = true; return; } // no counting rounds for this role
     // every 6th poll (~48 s) reloads everything, so rows edited by hand in the sheet still show up
     const rev = force || ++polls % 6 === 0 ? '' : (S.rev || '');
     const data = await run('getCounts', S.roundId || '', S.pin, rev);
@@ -1952,6 +2002,8 @@ async function startApp(init){
   const lg = $('#login'); if (lg) lg.remove();
   document.body.classList.remove('locked');
   renderMe(); renderWho();
+  document.body.classList.toggle('ho-only', hoOnly());
+  if (hoOnly()) setView('ho');
   // newer servers send the round's counts with init; older ones need the extra call
   if (init.rounds && !applyCounts(init)) render(); else await refresh(true);
   if (!timersOn) {
