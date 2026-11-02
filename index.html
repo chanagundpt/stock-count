@@ -264,6 +264,17 @@ canvas.ho-sign{width:100%;height:170px;border:1.5px dashed var(--line);border-ra
 .ho-tabs button{flex:1;font-size:15px;padding:9px}
 button.primary.ho-start{width:100%;font-size:20px;padding:18px}
 .chip.unk{border-style:dashed;color:var(--warn)}
+.ho-pop{position:fixed;left:50%;top:42%;transform:translate(-50%,-50%);z-index:200;min-width:240px;max-width:calc(100% - 40px);padding:20px 22px 18px;border-radius:20px;
+  text-align:center;color:#fff;box-shadow:0 18px 50px rgb(0 0 0 / .4);pointer-events:none}
+.ho-pop.ok{background:#178a50} .ho-pop.warn{background:#c77700} .ho-pop.dup{background:#7a3db8} .ho-pop.bad{background:#c0281e}
+.ho-pop-i{font-size:46px;font-weight:700;line-height:1}
+.ho-pop-t{font-size:22px;font-weight:700;margin-top:6px;line-height:1.3}
+.ho-pop-s{font-size:14px;opacity:.92;margin-top:4px;overflow-wrap:anywhere}
+@media (prefers-reduced-motion:no-preference){.ho-pop:not([hidden]){animation:hopop .14s ease-out}@keyframes hopop{from{transform:translate(-50%,-50%) scale(.85);opacity:0}}}
+.kpi[data-act]{cursor:pointer}
+.kpi[data-act]:active,.item[data-act]:active{transform:scale(.98)}
+.kpi[data-act] .l::after{content:' ›';font-weight:700}
+.kpi[data-act][aria-pressed=true]{outline:2px solid var(--accent);outline-offset:-2px}
 .ho-filters{margin-bottom:12px}
 .ho-fgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 @media (max-width:520px){.ho-fgrid{grid-template-columns:1fr}}
@@ -439,6 +450,7 @@ button.primary.ho-start{width:100%;font-size:20px;padding:18px}
 </div>
 
 <div id="toast" hidden></div>
+<div id="hoPop" class="ho-pop" hidden role="status" aria-live="assertive"><div class="ho-pop-i"></div><div class="ho-pop-t"></div><div class="ho-pop-s mono"></div></div>
 
 <div id="adminDlg" class="dlg" hidden role="dialog" aria-modal="true" aria-labelledby="adminTitle">
   <form id="adminForm" class="card" autocomplete="off">
@@ -834,15 +846,37 @@ const scanStatus = t => { $('#scanStatus').textContent = t; };
 let stream = null, scanning = false, track = null, zoomSteps = [], zoomIdx = 0, torchOn = false, audio = null;
 function beep(){ sfx('tick'); }
 // scan sounds: tick = barcode read · ok = saved (and found in JST) · warn = saved but check it (not in JST / other courier) · bad = refused
+// [frequency, seconds, wave, volume] — square/sawtooth waves sound loudest on phone speakers
 const SFX = {
-  tick: [[1800, .07, 'square', .08]],
-  ok: [[1320, .09, 'sine', .22], [1760, .14, 'sine', .22]],
-  warn: [[880, .14, 'triangle', .3], [0, .06], [880, .14, 'triangle', .3]],
-  bad: [[220, .38, 'sawtooth', .22]],
+  tick: [[2200, .05, 'square', .35]],
+  ok: [[1047, .1, 'square', .7], [1568, .2, 'square', .7]],
+  warn: [[660, .16, 'square', .8], [0, .07], [660, .16, 'square', .8]],
+  dup: [[523, .1, 'square', .9], [0, .05], [523, .1, 'square', .9], [0, .05], [523, .1, 'square', .9], [0, .05], [523, .1, 'square', .9]],
+  bad: [[160, .55, 'sawtooth', .95]],
 };
+let master = null;
 function ensureAudio(){
-  try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); if (audio.state === 'suspended') audio.resume(); } catch {}
+  // iPhone: "playback" plays even when the ring/silent switch is on silent and at full media volume
+  try { if (navigator.audioSession && navigator.audioSession.type !== 'playback') navigator.audioSession.type = 'playback'; } catch {}
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state === 'suspended') audio.resume();
+    if (!master) {
+      // a compressor keeps the loud tones from distorting
+      const comp = audio.createDynamicsCompressor(); comp.threshold.value = -10; comp.ratio.value = 4;
+      master = audio.createGain(); master.gain.value = 1; master.connect(comp); comp.connect(audio.destination);
+    }
+  } catch {}
   return audio;
+}
+// spoken Thai for problems, so the scanner hears what happened without looking
+function say(text){
+  try {
+    if (!window.speechSynthesis) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text); u.lang = 'th-TH'; u.rate = 1.15; u.volume = 1;
+    speechSynthesis.speak(u);
+  } catch {}
 }
 function sfx(kind){
   const a = ensureAudio(); if (!a) return;
@@ -850,14 +884,14 @@ function sfx(kind){
     let t = a.currentTime + .01;
     for (const [f, d, type, vol] of SFX[kind] || []) {
       if (f) { const o = a.createOscillator(), g = a.createGain(); o.type = type; o.frequency.value = f;
-        g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.001, t + d); o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + d); }
+        g.gain.setValueAtTime(vol, t); g.gain.setValueAtTime(vol, t + d * .7); g.gain.exponentialRampToValueAtTime(.001, t + d); o.connect(g); g.connect(master || a.destination); o.start(t); o.stop(t + d); }
       t += d;
     }
   } catch {}
-  try { navigator.vibrate && navigator.vibrate(kind === 'bad' ? [90, 60, 90] : kind === 'warn' ? [60, 40, 60] : 40); } catch {}
+  try { navigator.vibrate && navigator.vibrate(kind === 'bad' ? [200, 80, 200] : kind === 'dup' ? [80, 50, 80, 50, 80] : kind === 'warn' ? [100, 60, 100] : 40); } catch {}
 }
 // phones only allow sound after a tap: unlock it on the first touch
-document.addEventListener('pointerdown', () => ensureAudio(), { once: true });
+document.addEventListener('pointerdown', () => { ensureAudio(); try { window.speechSynthesis && speechSynthesis.speak(new SpeechSynthesisUtterance(' ')); } catch {} }, { once: true });
 async function openScanner(){
   $('#scanner').hidden = false; $('#scanBox').hidden = true; $('#photoBtn').hidden = true;
   $('#zoomBtn').hidden = true; $('#torchBtn').hidden = true; $('#scanBox').classList.remove('hit');
@@ -1644,14 +1678,14 @@ function renderHo(){
   if (HO.cur) return renderHoScan();
   const L = HO.list, el = $('#hoDash');
   if (HO.tab === 'report') return renderHoReport(el);
-  if (!L) { el.innerHTML = HO.err ? `<div class="warnbox bad">${esc(HO.err)}</div><p><button class="ghost" data-act="reload">ลองใหม่</button></p>` : '<div class="empty">กำลังโหลด…</div>'; hoBind(el); if (!HO.err) hoLoad(true); return; }
+  if (!L) { if (hoPaint(el, HO.err ? `<div class="warnbox bad">${esc(HO.err)}</div><p><button class="ghost" data-act="reload">ลองใหม่</button></p>` : '<div class="empty">กำลังโหลด…</div>')) hoBind(el); if (!HO.err) hoLoad(true); return; }
   const st = L.stats || { today: 0, waiting: 0 }, ck = L.check;
   let html = hoTabs() + `<button class="primary ho-start" type="button" data-act="start">📷 เริ่มสแกน</button>
     <p class="hint" style="text-align:center;margin:6px 0 14px">สแกนใบปะหน้าทุกกล่องที่ออกไปให้ขนส่ง ไม่ต้องแยกขนส่ง · ระบบเช็กกับ JST เองว่าขนส่งรับไปแล้วหรือยัง</p>
     <div class="kpis ho-kpis">
-      <div class="kpi"><div class="v">${num(st.today)}</div><div class="l">สแกนวันนี้ (กล่อง)</div></div>
-      <div class="kpi"><div class="v">${num(st.waiting)}</div><div class="l">รอ JST ยืนยันว่าขนส่งรับ</div></div>
-      <div class="kpi${L.issues.length ? ' alert' : ''}"><div class="v">${num(L.issues.length)}</div><div class="l">⚠ ต้องติดตาม</div></div></div>`;
+      <div class="kpi" data-act="go" data-go='{"days":1}' role="button" tabindex="0"><div class="v">${num(st.today)}</div><div class="l">สแกนวันนี้ (กล่อง)</div></div>
+      <div class="kpi" data-act="go" data-go='{"days":30,"status":"open"}' role="button" tabindex="0"><div class="v">${num(st.waiting)}</div><div class="l">รอ JST ยืนยันว่าขนส่งรับ</div></div>
+      <div class="kpi${L.issues.length ? ' alert' : ''}" data-act="go" data-go='{"days":30,"status":"issue"}' role="button" tabindex="0"><div class="v">${num(L.issues.length)}</div><div class="l">⚠ ต้องติดตาม</div></div></div>`;
   if (L.issues.length) {
     html += `<div class="ho-issues"><b>⚠ สแกนส่งออกแล้วเกิน ${L.alertHours} ชม. แต่ JST ยังไม่ขึ้นว่าขนส่งรับ</b>
       <p class="hint">ติดต่อขนส่งก่อนส่งของซ้ำ แล้วบันทึกการติดตามไว้</p><div class="list">` +
@@ -1662,20 +1696,29 @@ function renderHo(){
         <div class="row" style="margin-top:6px;flex-wrap:wrap"><button class="ghost" data-act="detail" data-id="${esc(p.ho)}">ดูรอบที่สแกน</button><button class="ghost" data-act="follow" data-id="${esc(p.id)}">บันทึกการติดตาม</button></div>
       </div></div>`).join('') + `</div></div>`;
   }
-  html += `<h2>วันนี้ แยกตามขนส่ง</h2>` + ((L.today || []).length ? `<div class="list">` + L.today.map(g => `<div class="item"><div class="main">
+  html += `<h2>วันนี้ แยกตามขนส่ง <span class="muted" style="font-weight:400;font-size:13px">(กดเพื่อดูรายการ)</span></h2>` + ((L.today || []).length ? `<div class="list">` + L.today.map(g => `<button class="item ho-row" data-act="go" data-go='${esc(JSON.stringify({ days: 1, carrier: carrierKey(g.carrier) || g.carrier || '' }))}'><div class="main">
       <div class="t1"><b>${esc(g.carrier || 'ไม่ทราบขนส่ง (รอเช็ก JST)')}</b>${g.issue ? `<span class="pill bad">⚠ ${num(g.issue)}</span>` : ''}</div>
       <div class="t2"><span style="color:var(--ok)">ขนส่งรับแล้ว ${num(g.collected)}</span> · <span style="color:var(--warn)">ยังไม่ยืนยัน ${num(g.waiting)}</span></div></div>
-      <span class="qty">${num(g.n)}</span></div>`).join('') + `</div>` : `<div class="empty">วันนี้ยังไม่ได้สแกน</div>`);
+      <span class="qty">${num(g.n)}</span></button>`).join('') + `</div>` : `<div class="empty">วันนี้ยังไม่ได้สแกน</div>`);
   html += `<div class="ho-check">${ck ? (ck.ok ? `เช็กกับ JST ล่าสุด ${hoTime(ck.at)} · รอยืนยัน ${num(ck.pending)} กล่อง${ck.complete === false ? ' (ยังเช็กไม่ครบ จะเช็กต่อรอบหน้า)' : ''}`
       : `<span class="bad">เช็กกับ JST ไม่สำเร็จ ${hoTime(ck.at)}: ${esc(ck.error)}</span>`) : 'ยังไม่เคยเช็กกับ JST (ระบบเช็กเองทุก 15 นาที 08:00–21:00)'}
       <button class="ghost" data-act="check">เช็กตอนนี้</button></div>
     <p class="hint" style="margin-top:8px">ดูย้อนหลัง/กรองตามขนส่ง ช่องทางขาย สถานะ ได้ที่แท็บ "รายงาน"</p>`;
   if (HO.err) html += `<p class="hint bad">${esc(HO.err)}</p>`;
-  el.innerHTML = html;
-  hoBind(el);
+  if (hoPaint(el, html)) hoBind(el);
 }
 // ---- รายงาน: พัสดุที่ส่งมอบแล้ว กรองตาม ขนส่ง / ช่องทางขาย / สถานะ ----
-const HO_STATUS = [['', 'ทุกสถานะ'], ['collected', 'ขนส่งรับแล้ว'], ['waiting', 'รอขนส่งรับ'], ['missing', 'ไม่พบใน JST'], ['none', 'ยังไม่เช็ก'], ['issue', '⚠ ต้องติดตาม']];
+const HO_STATUS = [['', 'ทุกสถานะ'], ['open', 'ยังไม่ยืนยันว่าขนส่งรับ (ทั้งหมด)'], ['collected', 'ขนส่งรับแล้ว'], ['waiting', 'รอขนส่งรับ'], ['missing', 'ไม่พบใน JST'], ['none', 'ยังไม่เช็ก'], ['issue', '⚠ ต้องติดตาม']];
+// open the report with filters already set (from a tile or a courier row on the home screen)
+function hoGoReport(o){
+  Object.assign(HO.f, { days: 7, carrier: '', shop: '', status: '', q: '' }, o);
+  HO.tab = 'report'; HO.rep = null; window.scrollTo(0, 0); hoReportLoad();
+}
+// set innerHTML only when it changed: the 8-second refresh used to rebuild the filters and close an open picker
+function hoPaint(el, html){
+  if (el._html === html) return false;
+  el._html = html; el.innerHTML = html; return true;
+}
 async function hoReportLoad(){
   if (HO.repLoading) return; HO.repLoading = true; renderHo();
   try {
@@ -1690,7 +1733,7 @@ function hoRepFiltered(){
   return (HO.rep ? HO.rep.rows : []).filter(p => (!from || p.at >= from)
     && (!f.carrier || (carrierKey(p.carrier) || p.carrier) === f.carrier)
     && (!f.shop || (p.shop || '(ไม่ระบุ)') === f.shop)
-    && (!f.status || (f.status === 'issue' ? p.issue : hoRepStatus(p) === f.status))
+    && (!f.status || (f.status === 'issue' ? p.issue : f.status === 'open' ? hoRepStatus(p) !== 'collected' : hoRepStatus(p) === f.status))
     && (!q || p.tracking.includes(q) || String(p.orderId).includes(q)));
 }
 function renderHoReport(el){
@@ -1699,7 +1742,8 @@ function renderHoReport(el){
   const opts = (list, cur, allLabel) => `<option value="">${allLabel}</option>` + list.map(([v, t]) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(t)}</option>`).join('');
   const carriers = [...new Map(all.map(p => [carrierKey(p.carrier) || p.carrier, p.carrier || 'ไม่ทราบขนส่ง'])).entries()];
   const shops = [...new Set(all.map(p => p.shop || '(ไม่ระบุ)'))].sort().map(x => [x, x]);
-  const cnt = k => rows.filter(p => k === 'issue' ? p.issue : hoRepStatus(p) === k).length;
+  const stRows = (() => { const keep = f.status; f.status = ''; const r = hoRepFiltered(); f.status = keep; return r; })();
+  const cnt = k => stRows.filter(p => k === 'issue' ? p.issue : hoRepStatus(p) === k).length;
   let html = hoTabs() + `<div class="card ho-filters">
     <div class="seg" role="group">${[[1, 'วันนี้'], [7, '7 วัน'], [30, '30 วัน']].map(([d, t]) => `<button type="button" data-days="${d}" aria-pressed="${f.days === d}">${t}</button>`).join('')}</div>
     <div class="ho-fgrid">
@@ -1712,10 +1756,10 @@ function renderHoReport(el){
   else if (R && R.err) html += `<div class="warnbox bad">${esc(R.err)}</div>`;
   else {
     html += `<div class="kpis ho-kpis4">
-      <div class="kpi"><div class="v">${num(rows.length)}</div><div class="l">กล่องทั้งหมด</div></div>
-      <div class="kpi"><div class="v" style="color:var(--ok)">${num(cnt('collected'))}</div><div class="l">ขนส่งรับแล้ว</div></div>
-      <div class="kpi"><div class="v" style="color:var(--warn)">${num(cnt('waiting') + cnt('none'))}</div><div class="l">ยังไม่ยืนยัน</div></div>
-      <div class="kpi${cnt('issue') ? ' alert' : ''}"><div class="v">${num(cnt('issue'))}</div><div class="l">⚠ ต้องติดตาม</div></div></div>
+      <div class="kpi" data-act="stat" data-stat="" role="button" tabindex="0" aria-pressed="${!f.status}"><div class="v">${num(stRows.length)}</div><div class="l">กล่องทั้งหมด</div></div>
+      <div class="kpi" data-act="stat" data-stat="collected" role="button" tabindex="0" aria-pressed="${f.status === 'collected'}"><div class="v" style="color:var(--ok)">${num(cnt('collected'))}</div><div class="l">ขนส่งรับแล้ว</div></div>
+      <div class="kpi" data-act="stat" data-stat="open" role="button" tabindex="0" aria-pressed="${f.status === 'open'}"><div class="v" style="color:var(--warn)">${num(stRows.length - cnt('collected'))}</div><div class="l">ยังไม่ยืนยัน</div></div>
+      <div class="kpi${cnt('issue') ? ' alert' : ''}" data-act="stat" data-stat="issue" role="button" tabindex="0" aria-pressed="${f.status === 'issue'}"><div class="v">${num(cnt('issue'))}</div><div class="l">⚠ ต้องติดตาม</div></div></div>
       <div class="toolbar"><button class="ghost" data-act="csv" ${rows.length ? '' : 'disabled'}>ดาวน์โหลด Excel (.csv)</button>
       <span class="hint">${HO.repLoading ? 'กำลังโหลด…' : R ? 'ข้อมูล ' + hoTime(R.at) : ''}</span></div>`;
     html += rows.length ? `<div class="list">` + rows.slice(0, 300).map(p => `<button class="item ho-row" data-act="detail" data-id="${esc(p.ho)}"><div class="main">
@@ -1726,7 +1770,7 @@ function renderHoReport(el){
       : `<div class="empty">ไม่มีพัสดุตามตัวกรองนี้</div>`;
   }
   const focused = document.activeElement && document.activeElement.dataset && document.activeElement.dataset.f === 'q', pos = focused ? document.activeElement.selectionStart : 0;
-  el.innerHTML = html;
+  if (!hoPaint(el, html)) return;
   hoBind(el);
   el.querySelectorAll('[data-days]').forEach(b => b.onclick = () => { f.days = Number(b.dataset.days); if (!HO.rep || (HO.rep.days || 0) < f.days) hoReportLoad(); else renderHo(); });
   el.querySelectorAll('select[data-f]').forEach(x => x.onchange = () => { f[x.dataset.f] = x.value; renderHo(); });
@@ -1748,6 +1792,8 @@ function hoBind(el){
     const id = b.dataset.id, a = b.dataset.act;
     if (a === 'start') hoQuickStart(b);
     else if (a === 'tab') { HO.tab = b.dataset.tab; renderHo(); if (HO.tab === 'report') hoReportLoad(); }
+    else if (a === 'go') hoGoReport(JSON.parse(b.dataset.go));
+    else if (a === 'stat') { HO.f.status = HO.f.status === b.dataset.stat ? '' : b.dataset.stat; renderHo(); }
     else if (a === 'open') hoOpen(id);
     else if (a === 'detail') hoDetail(id);
     else if (a === 'follow') hoFollowDlg(HO.list.issues.find(p => p.id === id));
@@ -1802,11 +1848,27 @@ function hoGroups(){
 }
 function hoSay(cls, text){ HO.msg = { cls, text }; const m = $('#hoMsg'); if (m) { m.className = 'hint ' + cls; m.textContent = text; } }
 /** returns true when the code was taken (new parcel) */
+// result card in the middle of the screen (over the camera too) for 1 second
+let popT;
+function hoPop(kind, title, sub){
+  const el = $('#hoPop'); if (!el) return;
+  el.className = 'ho-pop ' + kind;
+  el.querySelector('.ho-pop-i').textContent = { ok: '✓', warn: '!', dup: '⟳', bad: '✕' }[kind] || '';
+  el.querySelector('.ho-pop-t').textContent = title;
+  el.querySelector('.ho-pop-s').textContent = sub || '';
+  el.hidden = false; clearTimeout(popT); popT = setTimeout(() => { el.hidden = true; }, 1000);
+}
+/** one call per scan result: sound + vibration + spoken words (problems only) + popup + message line */
+function hoFeedback(kind, title, sub, words){
+  sfx(kind); hoPop(kind, title, sub);
+  if (words) say(words);
+  hoSay(kind === 'ok' ? 'ok' : kind === 'warn' ? 'warn' : 'bad', title + (sub ? ' · ' + sub : ''));
+}
 function hoAdd(raw){
   const t = norm(raw).replace(/[^A-Z0-9-]/g, '');
-  if (!/^[A-Z0-9-]{8,40}$/.test(t)) { sfx('bad'); hoSay('bad', `"${raw}" ไม่ใช่เลขพัสดุ — สแกนบาร์โค้ดเลขพัสดุบนใบปะหน้า`); return false; }
-  if (S.byCode.has(t)) { sfx('bad'); hoSay('bad', `${t} เป็นบาร์โค้ดสินค้า ไม่ใช่เลขพัสดุ — สแกนบาร์โค้ดบนใบปะหน้า`); return false; }
-  if (HO.items.some(p => p.tracking === t && p.state !== 'error')) { sfx('bad'); hoSay('bad', `${t} สแกนไปแล้วในรอบนี้`); return false; }
+  if (!/^[A-Z0-9-]{8,40}$/.test(t)) { hoFeedback('bad', 'ไม่ใช่เลขพัสดุ', String(raw).slice(0, 40), 'ไม่ใช่เลขพัสดุ'); return false; }
+  if (S.byCode.has(t)) { hoFeedback('bad', 'บาร์โค้ดสินค้า — สแกนเลขพัสดุบนใบปะหน้า', t, 'บาร์โค้ดสินค้า'); return false; }
+  if (HO.items.some(p => p.tracking === t && p.state !== 'error')) { hoFeedback('dup', 'สแกนซ้ำ', t, 'สแกนซ้ำ'); return false; }
   sfx('tick');
   HO.items = HO.items.filter(p => p.tracking !== t);
   HO.items.unshift({ id: 'tmp-' + t, tracking: t, at: Date.now(), by: myName(), state: 'sending' });
@@ -1836,12 +1898,18 @@ async function hoPump(){
       try {
         Object.assign(p, await run('hoScan', S.pin, cur.id, p.tracking), { state: '' });
         p.warn = hoJstWarn(p.jstLookup, '');
-        if (p.warn) { sfx(p.warn.bad ? 'bad' : 'warn'); hoSay(p.warn.bad ? 'bad' : 'warn', `${p.tracking}: ${p.warn.text}`); } else sfx('ok');
+        const j = p.jstLookup || {};
+        if (!p.warn) hoFeedback('ok', 'ส่งมอบสำเร็จ', p.tracking + (p.carrier ? ' · ' + p.carrier : ''));
+        else if (p.warn.bad) hoFeedback('bad', 'ออเดอร์ถูกยกเลิกใน JST — อย่าส่ง', p.tracking, 'ออเดอร์ยกเลิก อย่าส่ง');
+        else if (j.error) hoFeedback('warn', 'บันทึกแล้ว · ยังเช็ก JST ไม่ได้', p.tracking);
+        else hoFeedback('warn', 'บันทึกแล้ว · ไม่พบเลขนี้ใน JST', p.tracking, 'ไม่พบในเจเอสที');
       }
       catch (e) {
         if (e.message === 'AUTH_REQUIRED') { authLost(); break; }
         if (e.message === 'เชื่อมต่อไม่ได้') { await new Promise(r => setTimeout(r, 3000)); continue; } // no signal: keep it queued and retry
-        p.state = 'error'; p.err = errMsg(e); hoSay('bad', p.err); sfx('bad');
+        p.state = 'error'; p.err = errMsg(e);
+        if (/สแกนไปแล้ว/.test(p.err)) hoFeedback('dup', 'สแกนซ้ำ', p.err.replace(/^\S+\s*/, ''), 'สแกนซ้ำ');
+        else hoFeedback('bad', 'ไม่ได้บันทึก', p.err, 'ไม่ได้บันทึก');
       }
       if (HO.cur === cur) renderHoScan();
     }
