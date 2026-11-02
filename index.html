@@ -258,6 +258,17 @@ canvas.ho-sign{width:100%;height:170px;border:1.5px dashed var(--line);border-ra
 .ho-proof figure{margin:0;display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);min-width:0}
 .ho-proof img{width:100%;max-height:260px;object-fit:contain;border-radius:8px;border:1px solid var(--line);background:#fff}
 .ho-kpis{grid-template-columns:repeat(3,1fr)}
+.ho-kpis4{grid-template-columns:repeat(4,1fr)}
+@media (max-width:420px){.ho-kpis4{grid-template-columns:repeat(2,1fr)}}
+.ho-tabs{margin-bottom:12px;width:100%}
+.ho-tabs button{flex:1;font-size:15px;padding:9px}
+button.primary.ho-start{width:100%;font-size:20px;padding:18px}
+.chip.unk{border-style:dashed;color:var(--warn)}
+.ho-filters{margin-bottom:12px}
+.ho-fgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+@media (max-width:520px){.ho-fgrid{grid-template-columns:1fr}}
+.ho-fgrid .field span{font-size:12px;font-weight:600;color:var(--muted)}
+.ho-filters select,.ho-filters input[type=search]{width:100%;font:inherit;font-size:15px;padding:9px 10px;border:1.5px solid var(--line);border-radius:var(--r);background:var(--bg);color:var(--ink)}
 @media (max-width:420px){.ho-kpis{grid-template-columns:repeat(3,1fr)}.ho-kpis .kpi .v{font-size:18px}}
 </style>
 </head>
@@ -402,7 +413,8 @@ canvas.ho-sign{width:100%;height:170px;border:1.5px dashed var(--line);border-ra
           </div>
         </form>
         <p id="hoMsg" class="hint">สแกนบาร์โค้ดเลขพัสดุบนใบปะหน้าทุกกล่องที่ยกให้ขนส่ง · กล้องสแกนต่อเนื่องได้ไม่ต้องกดใหม่</p>
-        <button type="button" class="primary" id="hoClose" disabled>ส่งมอบ · ให้คนรถเซ็นรับ</button>
+        <button type="button" class="primary" id="hoDone">✓ เสร็จแล้ว</button>
+        <button type="button" class="ghost" id="hoClose" disabled>✍ ให้คนรถเซ็นรับ (ไม่บังคับ — เก็บเป็นหลักฐาน)</button>
         <button type="button" class="ghost danger" id="hoCancel" hidden>ยกเลิกรอบนี้</button>
       </div>
       <h2>พัสดุในรอบนี้ (ล่าสุดอยู่บน)</h2>
@@ -1603,7 +1615,8 @@ $('#meBtn').addEventListener('click', openUserMenu);
 // ---------- ส่งมอบพัสดุให้ขนส่ง ----------
 // สแกนทุกกล่องตอนยกให้ขนส่ง → คนรถเซ็น + ถ่ายรูป = ใบส่งมอบ; ระบบเช็กกับ JST ทุกชั่วโมงว่าขนส่งสแกนรับแล้วหรือยัง
 // การสแกนส่งเข้าคิวทีละรายการ (ไม่ต้องรอเซิร์ฟเวอร์ตอบก่อนสแกนกล่องถัดไป)
-const HO = { list: null, loading: false, err: '', cur: null, items: [], pumping: false, listAt: 0, msg: null };
+const HO = { list: null, loading: false, err: '', cur: null, items: [], pumping: false, listAt: 0, msg: null,
+  tab: 'home', rep: null, repLoading: false, f: { days: 7, carrier: '', shop: '', status: '', q: '' } };
 const hoTime = ms => ms ? fmtTime(ms) : '-';
 const hoHours = ms => Math.max(0, Math.floor((Date.now() - ms) / 3600e3));
 function hoJstPill(p, alertHours){
@@ -1624,54 +1637,117 @@ async function hoLoad(force){
   finally { HO.loading = false; renderHo(); }
 }
 // called by the 8-second poll while the tab is open
-function hoPoll(){ if (HO.cur) hoReloadCur(); else hoLoad(false); }
+function hoPoll(){ if (HO.cur) hoReloadCur(); else if (HO.tab !== 'report') hoLoad(false); }
 
 function renderHo(){
   $('#hoDash').hidden = !!HO.cur; $('#hoScanView').hidden = !HO.cur;
   if (HO.cur) return renderHoScan();
   const L = HO.list, el = $('#hoDash');
+  if (HO.tab === 'report') return renderHoReport(el);
   if (!L) { el.innerHTML = HO.err ? `<div class="warnbox bad">${esc(HO.err)}</div><p><button class="ghost" data-act="reload">ลองใหม่</button></p>` : '<div class="empty">กำลังโหลด…</div>'; hoBind(el); if (!HO.err) hoLoad(true); return; }
-  const open = L.handovers.filter(h => h.status === 'open'), done = L.handovers.filter(h => h.status !== 'open');
-  const today = new Date().toDateString();
-  const todayN = done.filter(h => h.status === 'closed' && new Date(h.closedAt).toDateString() === today).reduce((a, h) => a + h.n, 0);
-  const waiting = done.filter(h => h.status === 'closed').reduce((a, h) => a + h.n - h.collected, 0);
-  const ck = L.check;
-  let html = `<div class="kpis ho-kpis">
-      <div class="kpi"><div class="v">${num(todayN)}</div><div class="l">ส่งมอบวันนี้ (กล่อง)</div></div>
-      <div class="kpi"><div class="v">${num(waiting)}</div><div class="l">รอ JST ยืนยันว่าขนส่งรับ</div></div>
+  const st = L.stats || { today: 0, waiting: 0 }, ck = L.check;
+  let html = hoTabs() + `<button class="primary ho-start" type="button" data-act="start">📷 เริ่มสแกน</button>
+    <p class="hint" style="text-align:center;margin:6px 0 14px">สแกนใบปะหน้าทุกกล่องที่ออกไปให้ขนส่ง ไม่ต้องแยกขนส่ง · ระบบเช็กกับ JST เองว่าขนส่งรับไปแล้วหรือยัง</p>
+    <div class="kpis ho-kpis">
+      <div class="kpi"><div class="v">${num(st.today)}</div><div class="l">สแกนวันนี้ (กล่อง)</div></div>
+      <div class="kpi"><div class="v">${num(st.waiting)}</div><div class="l">รอ JST ยืนยันว่าขนส่งรับ</div></div>
       <div class="kpi${L.issues.length ? ' alert' : ''}"><div class="v">${num(L.issues.length)}</div><div class="l">⚠ ต้องติดตาม</div></div></div>`;
   if (L.issues.length) {
-    html += `<div class="ho-issues"><b>⚠ ส่งมอบแล้วเกิน ${L.alertHours} ชม. แต่ JST ยังไม่ขึ้นว่าขนส่งรับ</b>
-      <p class="hint">ติดต่อขนส่งพร้อมใบส่งมอบ (ลายเซ็นคนรถ + รูป) ก่อนส่งของซ้ำ แล้วบันทึกการติดตามไว้</p><div class="list">` +
+    html += `<div class="ho-issues"><b>⚠ สแกนส่งออกแล้วเกิน ${L.alertHours} ชม. แต่ JST ยังไม่ขึ้นว่าขนส่งรับ</b>
+      <p class="hint">ติดต่อขนส่งก่อนส่งของซ้ำ แล้วบันทึกการติดตามไว้</p><div class="list">` +
       L.issues.map(p => `<div class="item"><div class="main">
         <div class="t1"><b class="mono">${esc(p.tracking)}</b>${hoJstPill(p)}</div>
-        <div class="t2">${esc(p.h.carrier || p.carrier)} · ส่งมอบ ${hoTime(p.h.closedAt)} (${hoHours(p.h.closedAt)} ชม.) · คนรถ ${esc(p.h.driver || '-')}${p.h.plate ? ' ' + esc(p.h.plate) : ''}${p.orderId ? ' · ออเดอร์ ' + esc(p.orderId) : ''}</div>
+        <div class="t2"><b>${esc(p.carrier || p.h.carrier || 'ไม่ทราบขนส่ง')}</b> · สแกน ${hoTime(p.at)} (${hoHours(p.at)} ชม.) โดย ${esc(p.by)}${p.h.driver ? ' · คนรถเซ็นรับ ' + esc(p.h.driver) : ''}${p.orderId ? ' · ออเดอร์ ' + esc(p.orderId) : ''}</div>
         ${p.follow ? `<div class="t2">📝 ${esc(p.follow)} — ${esc(p.followBy)} ${hoTime(p.followAt)}</div>` : ''}
-        <div class="row" style="margin-top:6px;flex-wrap:wrap"><button class="ghost" data-act="detail" data-id="${esc(p.ho)}">ใบส่งมอบ</button><button class="ghost" data-act="follow" data-id="${esc(p.id)}">บันทึกการติดตาม</button></div>
+        <div class="row" style="margin-top:6px;flex-wrap:wrap"><button class="ghost" data-act="detail" data-id="${esc(p.ho)}">ดูรอบที่สแกน</button><button class="ghost" data-act="follow" data-id="${esc(p.id)}">บันทึกการติดตาม</button></div>
       </div></div>`).join('') + `</div></div>`;
   }
-  html += `<button class="primary" type="button" data-act="start" style="width:100%;margin-top:12px">+ เริ่มส่งมอบพัสดุให้ขนส่ง</button>`;
-  if (open.length) html += `<h2>กำลังสแกน (ยังไม่ได้ส่งมอบ)</h2><div class="list">` + open.map(h => `<div class="item"><div class="main">
-      <div class="t1"><b>${esc(h.carrier)}</b><span class="pill warn">ยังไม่เซ็นรับ</span></div>
-      <div class="t2">${num(h.n)} กล่อง · เริ่ม ${hoTime(h.startedAt)} โดย ${esc(h.startedBy)}</div></div>
-      <button class="ghost solid" data-act="open" data-id="${esc(h.id)}">สแกนต่อ</button></div>`).join('') + `</div>`;
+  html += `<h2>วันนี้ แยกตามขนส่ง</h2>` + ((L.today || []).length ? `<div class="list">` + L.today.map(g => `<div class="item"><div class="main">
+      <div class="t1"><b>${esc(g.carrier || 'ไม่ทราบขนส่ง (รอเช็ก JST)')}</b>${g.issue ? `<span class="pill bad">⚠ ${num(g.issue)}</span>` : ''}</div>
+      <div class="t2"><span style="color:var(--ok)">ขนส่งรับแล้ว ${num(g.collected)}</span> · <span style="color:var(--warn)">ยังไม่ยืนยัน ${num(g.waiting)}</span></div></div>
+      <span class="qty">${num(g.n)}</span></div>`).join('') + `</div>` : `<div class="empty">วันนี้ยังไม่ได้สแกน</div>`);
   html += `<div class="ho-check">${ck ? (ck.ok ? `เช็กกับ JST ล่าสุด ${hoTime(ck.at)} · รอยืนยัน ${num(ck.pending)} กล่อง${ck.complete === false ? ' (ยังเช็กไม่ครบ จะเช็กต่อรอบหน้า)' : ''}`
-      : `<span class="bad">เช็กกับ JST ไม่สำเร็จ ${hoTime(ck.at)}: ${esc(ck.error)}</span>`) : 'ยังไม่เคยเช็กกับ JST (ระบบเช็กเองทุกชั่วโมงหลังส่งมอบรอบแรก)'}
-      <button class="ghost" data-act="check">เช็กตอนนี้</button></div>`;
-  html += `<h2>ส่งมอบแล้ว (30 วันล่าสุด)</h2>` + (done.length ? `<div class="list">` + done.map(h => `<button class="item ho-row" data-act="detail" data-id="${esc(h.id)}"><div class="main">
-      <div class="t1"><b>${esc(h.carrier)}</b>${h.status === 'cancelled' ? '<span class="pill none">ยกเลิก</span>'
-        : (h.flagged ? `<span class="pill bad">⚠ ${num(h.flagged)}</span>` : '') + `<span class="pill ${h.collected >= h.n ? 'ok' : 'none'}">ขนส่งรับแล้ว ${num(h.collected)}/${num(h.n)}</span>`}</div>
-      <div class="t2">${h.status === 'cancelled' ? `ยกเลิกโดย ${esc(h.closedBy)} ${hoTime(h.closedAt)}`
-        : `${hoTime(h.closedAt)} · คนรถ ${esc(h.driver || '-')}${h.plate ? ' ' + esc(h.plate) : ''} · ส่งมอบโดย ${esc(h.closedBy)}`}</div></div>
-      <span class="qty">${num(h.n)}</span></button>`).join('') + `</div>` : `<div class="empty">ยังไม่มีการส่งมอบ</div>`);
+      : `<span class="bad">เช็กกับ JST ไม่สำเร็จ ${hoTime(ck.at)}: ${esc(ck.error)}</span>`) : 'ยังไม่เคยเช็กกับ JST (ระบบเช็กเองทุกชั่วโมง 08:00–20:00)'}
+      <button class="ghost" data-act="check">เช็กตอนนี้</button></div>
+    <p class="hint" style="margin-top:8px">ดูย้อนหลัง/กรองตามขนส่ง ช่องทางขาย สถานะ ได้ที่แท็บ "รายงาน"</p>`;
   if (HO.err) html += `<p class="hint bad">${esc(HO.err)}</p>`;
   el.innerHTML = html;
   hoBind(el);
 }
+// ---- รายงาน: พัสดุที่ส่งมอบแล้ว กรองตาม ขนส่ง / ช่องทางขาย / สถานะ ----
+const HO_STATUS = [['', 'ทุกสถานะ'], ['collected', 'ขนส่งรับแล้ว'], ['waiting', 'รอขนส่งรับ'], ['missing', 'ไม่พบใน JST'], ['none', 'ยังไม่เช็ก'], ['issue', '⚠ ต้องติดตาม']];
+async function hoReportLoad(){
+  if (HO.repLoading) return; HO.repLoading = true; renderHo();
+  try {
+    const r = await run('hoReport', S.pin, HO.f.days);
+    HO.rep = { days: HO.f.days, at: Date.now(), rows: r.rows.map(x => Object.fromEntries(r.cols.map((c, i) => [c, x[i]]))) };
+  } catch (e) { HO.rep = { err: errMsg(e), rows: [] }; }
+  finally { HO.repLoading = false; renderHo(); }
+}
+function hoRepStatus(p){ return p.jst || 'none'; }
+function hoRepFiltered(){
+  const f = HO.f, q = f.q.trim().toUpperCase(), from = f.days === 1 ? new Date().setHours(0, 0, 0, 0) : 0;
+  return (HO.rep ? HO.rep.rows : []).filter(p => (!from || p.at >= from)
+    && (!f.carrier || (carrierKey(p.carrier) || p.carrier) === f.carrier)
+    && (!f.shop || (p.shop || '(ไม่ระบุ)') === f.shop)
+    && (!f.status || (f.status === 'issue' ? p.issue : hoRepStatus(p) === f.status))
+    && (!q || p.tracking.includes(q) || String(p.orderId).includes(q)));
+}
+function renderHoReport(el){
+  const f = HO.f, R = HO.rep;
+  const all = R ? R.rows : [], rows = hoRepFiltered();
+  const opts = (list, cur, allLabel) => `<option value="">${allLabel}</option>` + list.map(([v, t]) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(t)}</option>`).join('');
+  const carriers = [...new Map(all.map(p => [carrierKey(p.carrier) || p.carrier, p.carrier || 'ไม่ทราบขนส่ง'])).entries()];
+  const shops = [...new Set(all.map(p => p.shop || '(ไม่ระบุ)'))].sort().map(x => [x, x]);
+  const cnt = k => rows.filter(p => k === 'issue' ? p.issue : hoRepStatus(p) === k).length;
+  let html = hoTabs() + `<div class="card ho-filters">
+    <div class="seg" role="group">${[[1, 'วันนี้'], [7, '7 วัน'], [30, '30 วัน']].map(([d, t]) => `<button type="button" data-days="${d}" aria-pressed="${f.days === d}">${t}</button>`).join('')}</div>
+    <div class="ho-fgrid">
+      <label class="field"><span>ขนส่ง</span><select data-f="carrier">${opts(carriers, f.carrier, 'ทุกขนส่ง')}</select></label>
+      <label class="field"><span>ช่องทางการขาย</span><select data-f="shop">${opts(shops, f.shop, 'ทุกช่องทาง')}</select></label>
+      <label class="field"><span>สถานะการขนส่ง</span><select data-f="status">${opts(HO_STATUS.slice(1), f.status, 'ทุกสถานะ')}</select></label>
+    </div>
+    <input type="search" data-f="q" placeholder="ค้นหาเลขพัสดุ / เลขออเดอร์" value="${esc(f.q)}"></div>`;
+  if (HO.repLoading && !R) html += '<div class="empty">กำลังโหลดรายงาน…</div>';
+  else if (R && R.err) html += `<div class="warnbox bad">${esc(R.err)}</div>`;
+  else {
+    html += `<div class="kpis ho-kpis4">
+      <div class="kpi"><div class="v">${num(rows.length)}</div><div class="l">กล่องทั้งหมด</div></div>
+      <div class="kpi"><div class="v" style="color:var(--ok)">${num(cnt('collected'))}</div><div class="l">ขนส่งรับแล้ว</div></div>
+      <div class="kpi"><div class="v" style="color:var(--warn)">${num(cnt('waiting') + cnt('none'))}</div><div class="l">ยังไม่ยืนยัน</div></div>
+      <div class="kpi${cnt('issue') ? ' alert' : ''}"><div class="v">${num(cnt('issue'))}</div><div class="l">⚠ ต้องติดตาม</div></div></div>
+      <div class="toolbar"><button class="ghost" data-act="csv" ${rows.length ? '' : 'disabled'}>ดาวน์โหลด Excel (.csv)</button>
+      <span class="hint">${HO.repLoading ? 'กำลังโหลด…' : R ? 'ข้อมูล ' + hoTime(R.at) : ''}</span></div>`;
+    html += rows.length ? `<div class="list">` + rows.slice(0, 300).map(p => `<button class="item ho-row" data-act="detail" data-id="${esc(p.ho)}"><div class="main">
+        <div class="t1"><b class="mono">${esc(p.tracking)}</b>${hoJstPill({ jst: p.jst, flaggedAt: p.issue, done: false })}</div>
+        <div class="t2"><b>${esc(p.carrier || 'ไม่ทราบขนส่ง')}</b> · ${esc(p.shop || 'ไม่ระบุช่องทาง')} · สแกน ${hoTime(p.at)} โดย ${esc(p.by)}${p.driver ? ' · คนรถเซ็นรับ ' + esc(p.driver) : ''}${p.orderId ? ' · ออเดอร์ ' + esc(p.orderId) : ''}</div>
+        ${p.follow ? `<div class="t2">📝 ${esc(p.follow)}</div>` : ''}</div></button>`).join('') + `</div>`
+      + (rows.length > 300 ? `<p class="hint" style="margin-top:8px">แสดง 300 จาก ${num(rows.length)} กล่อง — กรองให้แคบลง หรือดาวน์โหลด Excel เพื่อดูทั้งหมด</p>` : '')
+      : `<div class="empty">ไม่มีพัสดุตามตัวกรองนี้</div>`;
+  }
+  const focused = document.activeElement && document.activeElement.dataset && document.activeElement.dataset.f === 'q', pos = focused ? document.activeElement.selectionStart : 0;
+  el.innerHTML = html;
+  hoBind(el);
+  el.querySelectorAll('[data-days]').forEach(b => b.onclick = () => { f.days = Number(b.dataset.days); if (!HO.rep || (HO.rep.days || 0) < f.days) hoReportLoad(); else renderHo(); });
+  el.querySelectorAll('select[data-f]').forEach(x => x.onchange = () => { f[x.dataset.f] = x.value; renderHo(); });
+  const qi = el.querySelector('input[data-f=q]');
+  qi.oninput = () => { f.q = qi.value; renderHo(); };
+  if (focused) { const n = el.querySelector('input[data-f=q]'); n.focus(); n.setSelectionRange(pos, pos); }
+  const csv = el.querySelector('[data-act=csv]');
+  if (csv) csv.onclick = () => {
+    const head = ['เลขพัสดุ', 'ขนส่ง', 'ช่องทางการขาย', 'สแกนเมื่อ', 'ผู้สแกน', 'คนรถที่เซ็นรับ', 'สถานะ', 'สถานะใน JST', 'เลขออเดอร์ JST', 'ต้องติดตาม', 'บันทึกการติดตาม'];
+    const label = Object.fromEntries(HO_STATUS);
+    const lines = [head].concat(rows.map(p => [p.tracking, p.carrier, p.shop, hoTime(p.at), p.by, p.driver, label[hoRepStatus(p)] || '', p.jstText, p.orderId, p.issue ? 'ใช่' : '', p.follow]));
+    const text = '\ufeff' + lines.map(r => r.map(v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+    a.download = `ส่งมอบขนส่ง ${new Date().toISOString().slice(0, 10)}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+}
 function hoBind(el){
   el.querySelectorAll('[data-act]').forEach(b => b.onclick = () => {
     const id = b.dataset.id, a = b.dataset.act;
-    if (a === 'start') hoStartDlg();
+    if (a === 'start') hoQuickStart(b);
+    else if (a === 'tab') { HO.tab = b.dataset.tab; renderHo(); if (HO.tab === 'report') hoReportLoad(); }
     else if (a === 'open') hoOpen(id);
     else if (a === 'detail') hoDetail(id);
     else if (a === 'follow') hoFollowDlg(HO.list.issues.find(p => p.id === id));
@@ -1679,23 +1755,19 @@ function hoBind(el){
     else if (a === 'reload') hoLoad(true);
   });
 }
-function hoStartDlg(){
-  const carriers = (HO.list && HO.list.carriers) || [], last = lsGet('tmws.hoCarrier') || '';
-  const md = openModal(`<div class="modal-head">ขนส่งเจ้าไหนมารับ?</div><div class="modal-body">
-    <div class="chips ho-carriers">${carriers.map(c => `<button type="button" class="chip${c === last ? ' on' : ''}" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div>
-    <div class="field"><label>หรือพิมพ์ชื่อขนส่ง</label><input type="text" id="hoCarrierIn" value="${esc(last)}"></div></div>
-    <div class="modal-foot"><span style="flex:1"></span><button class="ghost" data-x>ยกเลิก</button><button class="ghost solid" data-ok>เริ่มสแกน</button></div>`);
-  const inp = md.el.querySelector('#hoCarrierIn');
-  md.el.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { inp.value = b.dataset.c; md.el.querySelectorAll('[data-c]').forEach(x => x.classList.toggle('on', x === b)); });
-  md.el.querySelector('[data-x]').onclick = md.close;
-  md.el.querySelector('[data-ok]').onclick = async () => {
-    const c = inp.value.trim();
-    if (!c) { inp.focus(); return; }
-    const ok = md.el.querySelector('[data-ok]'); ok.disabled = true; ok.textContent = 'กำลังเริ่ม…';
-    try { const h = await run('hoStart', S.pin, c); lsSet('tmws.hoCarrier', c); md.close(); HO.cur = h; HO.items = []; HO.msg = null; HO.listAt = 0; renderHo(); $('#hoCode').focus(); }
-    catch (e) { ok.disabled = false; ok.textContent = 'เริ่มสแกน'; toast(errMsg(e)); }
-  };
+// one tap: open today's scanning round and the camera — every scan = this parcel went out to a courier
+async function hoQuickStart(btn){
+  ensureAudio();
+  btn.disabled = true; btn.textContent = 'กำลังเริ่ม…';
+  try {
+    // the server hands back today's shared round (everyone scans into it), so earlier scans show up too
+    HO.cur = await run('hoStart', S.pin, ''); HO.items = []; HO.msg = null; HO.listAt = 0;
+    renderHo(); window.scrollTo(0, 0);
+    scanFor = 'ho'; openScanner(); hoReloadCur();
+  } catch (e) { toast(errMsg(e)); btn.disabled = false; btn.textContent = '📷 เริ่มสแกน'; }
 }
+const hoTabs = () => `<div class="seg ho-tabs" role="tablist">${[['home', 'ส่งมอบ'], ['report', 'รายงาน']].map(([k, t]) =>
+  `<button type="button" data-act="tab" data-tab="${k}" aria-pressed="${HO.tab === k}">${t}</button>`).join('')}</div>`;
 async function hoOpen(id){
   const h = HO.list && HO.list.handovers.find(x => x.id === id);
   HO.cur = h || { id, carrier: '', status: 'open' }; HO.items = []; HO.msg = { cls: '', text: 'กำลังโหลดรายการ…' };
@@ -1719,6 +1791,15 @@ async function hoReloadCur(){
 }
 function hoBack(){ HO.cur = null; HO.items = []; HO.listAt = 0; renderHo(); hoLoad(true); window.scrollTo(0, 0); }
 const hoCount = () => HO.items.filter(p => p.state !== 'error').length;
+/** parcels in the open round grouped by courier: [{key, name, n}] (key '' = courier not known yet) */
+function hoGroups(){
+  const g = new Map();
+  HO.items.filter(p => p.state !== 'error' && p.state !== 'sending').forEach(p => {
+    const k = carrierKey(p.carrier) || (p.carrier ? p.carrier.toLowerCase() : '');
+    const x = g.get(k) || { key: k, name: p.carrier || 'ไม่ทราบขนส่ง', n: 0 }; x.n++; g.set(k, x);
+  });
+  return [...g.values()].sort((a, b) => (a.key ? 0 : 1) - (b.key ? 0 : 1) || b.n - a.n);
+}
 function hoSay(cls, text){ HO.msg = { cls, text }; const m = $('#hoMsg'); if (m) { m.className = 'hint ' + cls; m.textContent = text; } }
 /** returns true when the code was taken (new parcel) */
 function hoAdd(raw){
@@ -1754,7 +1835,7 @@ async function hoPump(){
       if (!p) break;
       try {
         Object.assign(p, await run('hoScan', S.pin, cur.id, p.tracking), { state: '' });
-        p.warn = hoJstWarn(p.jstLookup, cur.carrier);
+        p.warn = hoJstWarn(p.jstLookup, '');
         if (p.warn) { sfx(p.warn.bad ? 'bad' : 'warn'); hoSay(p.warn.bad ? 'bad' : 'warn', `${p.tracking}: ${p.warn.text}`); } else sfx('ok');
       }
       catch (e) {
@@ -1769,21 +1850,24 @@ async function hoPump(){
 function renderHoScan(){
   const h = HO.cur; if (!h) return;
   const n = hoCount(), sending = HO.items.filter(p => p.state === 'sending').length, bad = HO.items.filter(p => p.state === 'error').length;
-  $('#hoHead').innerHTML = `<div><div class="muted" style="font-size:13px">กำลังสแกนส่งมอบให้</div><b style="font-size:18px">${esc(h.carrier || '…')}</b></div>
+  const groups = hoGroups();
+  $('#hoHead').innerHTML = `<div style="min-width:0"><div class="muted" style="font-size:13px">กำลังสแกน · แยกตามขนส่ง</div>
+      <div class="chips" style="margin-top:4px">${groups.length ? groups.map(g => `<span class="chip${g.key ? '' : ' unk'}">${esc(g.name)} <b>${num(g.n)}</b></span>`).join('') : '<span class="muted">ยังไม่มีพัสดุ</span>'}</div></div>
     <div class="ho-n"><span class="mono">${num(n)}</span><small>กล่อง</small></div>`;
   if (HO.msg) { const m = $('#hoMsg'); m.className = 'hint ' + HO.msg.cls; m.textContent = HO.msg.text; }
   $('#hoList').innerHTML = HO.items.length ? `<div class="list">` + HO.items.map(p => `<div class="item${p.state === 'error' ? ' ho-err' : ''}"><div class="main">
       <div class="t1"><b class="mono">${esc(p.tracking)}</b>${p.state === 'sending' ? '<span class="pill none">กำลังบันทึก…</span>' : p.state === 'error' ? '<span class="pill bad">ไม่ได้บันทึก</span>'
         : p.warn ? `<span class="pill ${p.warn.bad ? 'bad' : 'warn'}">${p.warn.bad ? 'ยกเลิกใน JST' : 'ตรวจสอบ'}</span>` : p.orderId ? '<span class="pill ok">พบใน JST</span>' : ''}</div>
-      <div class="t2">${p.state === 'error' ? esc(p.err) : `${hoTime(p.at)} · ${esc(p.by)}${p.orderId ? ' · ออเดอร์ ' + esc(p.orderId) : ''}`}</div>
+      <div class="t2">${p.state === 'error' ? esc(p.err) : p.state === 'sending' ? 'กำลังเช็กกับ JST…' : `<b>${esc(p.carrier || 'ไม่ทราบขนส่ง')}</b> · ${hoTime(p.at)} · ${esc(p.by)}${p.orderId ? ' · ออเดอร์ ' + esc(p.orderId) : ''}`}</div>
       ${p.warn && p.state !== 'error' ? `<div class="t2" style="color:var(--${p.warn.bad ? 'bad' : 'warn'})">${esc(p.warn.text)}</div>` : ''}</div>
       ${p.state === 'sending' ? '' : `<button class="ghost${p.state === 'error' ? '' : ' danger'}" data-del="${esc(p.id)}">${p.state === 'error' ? 'เอาออก' : 'ลบ'}</button>`}</div>`).join('') + `</div>`
     : `<div class="empty">ยังไม่ได้สแกน — สแกนบาร์โค้ดเลขพัสดุบนใบปะหน้าทีละกล่อง</div>`;
   $('#hoList').querySelectorAll('[data-del]').forEach(b => b.onclick = () => hoDel(HO.items.find(p => p.id === b.dataset.del), b));
   const close = $('#hoClose');
   close.disabled = !n || sending > 0 || bad > 0;
-  close.textContent = sending ? `กำลังบันทึก ${sending} รายการ…` : bad ? `เอารายการสีแดงออกก่อน (${bad})` : `ส่งมอบ · ให้คนรถเซ็นรับ ${num(n)} กล่อง`;
-  $('#hoCancel').hidden = n > 0;
+  close.textContent = sending ? `กำลังบันทึก ${sending} รายการ…` : bad ? `เอารายการสีแดงออกก่อน (${bad})` : `✍ ให้คนรถเซ็นรับ (ไม่บังคับ — เก็บเป็นหลักฐาน)`;
+  $('#hoDone').textContent = sending ? `กำลังบันทึก ${sending} รายการ…` : `✓ เสร็จแล้ว (${num(n)} กล่อง)`;
+  $('#hoCancel').hidden = true;
 }
 async function hoDel(p, btn){
   if (!p) return;
@@ -1802,12 +1886,23 @@ $('#hoCancel').addEventListener('click', async () => {
   try { await run('hoCancel', S.pin, HO.cur.id); toast('ยกเลิกรอบแล้ว'); hoBack(); } catch (e) { toast(errMsg(e)); }
 });
 $('#hoClose').addEventListener('click', () => hoCloseDlg());
+$('#hoDone').addEventListener('click', () => {
+  // scans still being sent keep going in the background; leaving is safe (each scan is already the record)
+  if (HO.items.some(p => p.state === 'sending')) toast('กำลังบันทึกรายการที่เหลือ…');
+  hoBack();
+});
 
 // ---- ส่งมอบ: คนรถนับ + เซ็น + ถ่ายรูป ----
 function hoCloseDlg(){
-  const h = HO.cur, n = hoCount();
-  const md = openModal(`<div class="modal-head">ส่งมอบให้ ${esc(h.carrier)}</div><div class="modal-body">
-    <div class="ho-big"><span class="mono">${num(n)}</span> กล่อง</div>
+  const h = HO.cur, groups = hoGroups(), known = groups.filter(g => g.key), unk = groups.find(g => !g.key);
+  if (!known.length && !h.carrier) { toast('ยังไม่รู้ว่าพัสดุเป็นของขนส่งไหน รอระบบเช็กกับ JST สักครู่ หรือสแกนให้ครบก่อน'); return; }
+  let pick = (known[0] || {}).name || h.carrier, n = 0;
+  const md = openModal(`<div class="modal-head">ให้คนรถเซ็นรับ (ไม่บังคับ)</div><div class="modal-body">
+    <div class="field"><label>คนรถของขนส่งไหนมารับ?</label>
+      <div class="chips ho-carriers" id="hoPick">${known.map(g => `<button type="button" class="chip" data-c="${esc(g.name)}">${esc(g.name)} <b>${num(g.n)}</b></button>`).join('')}</div>
+      ${unk ? `<label class="check"><input type="checkbox" id="hoUnk" ${known.length <= 1 ? 'checked' : ''}> รวมกล่องที่ยังไม่ทราบขนส่ง ${num(unk.n)} กล่องไปด้วย</label>` : ''}</div>
+    <div class="ho-big"><span class="mono" id="hoN">0</span> กล่อง</div>
+    <p class="hint" style="text-align:center" id="hoRest"></p>
     <p class="hint" style="text-align:center">ให้คนรถนับกล่องให้ตรงกับจำนวนนี้ก่อนเซ็น</p>
     <div class="field"><label>ชื่อคนรถ *</label><input type="text" id="hoDriver" autocomplete="off"></div>
     <div class="grid2"><div class="field"><label>ทะเบียนรถ</label><input type="text" id="hoPlate" autocomplete="off"></div>
@@ -1816,13 +1911,25 @@ function hoCloseDlg(){
       <label class="ghost ho-photo" for="hoPhotoIn"><span id="hoPhotoTxt">📷 ถ่ายรูป</span><img id="hoPhotoImg" alt="" hidden></label>
       <input type="file" id="hoPhotoIn" accept="image/*" capture="environment" hidden></div>
     <div class="field"><label>ลายเซ็นคนรถ * <button type="button" class="linkbtn" id="hoSignClr">ล้าง</button></label>
-      <canvas id="hoSign" class="ho-sign"></canvas><p class="hint">ยืนยันว่ารับพัสดุ ${num(n)} กล่องไปแล้ว</p></div>
+      <canvas id="hoSign" class="ho-sign"></canvas><p class="hint" id="hoSignNote"></p></div>
     <div class="field"><label>หมายเหตุ</label><input type="text" id="hoNote" autocomplete="off"></div>
     <p class="hint bad" id="hoCloseErr"></p></div>
     <div class="modal-foot"><span style="flex:1"></span><button class="ghost" data-x>กลับไปสแกน</button><button class="ghost solid" data-ok>ยืนยันส่งมอบ</button></div>`, true);
-  const q = s => md.el.querySelector(s);
-  q('#hoDriver').value = lsGet('tmws.hoDriver.' + h.carrier) || '';
-  q('#hoPlate').value = lsGet('tmws.hoPlate.' + h.carrier) || '';
+  const q = s => md.el.querySelector(s), total = hoCount();
+  const update = () => {
+    const g = known.find(x => x.name === pick), withUnk = !q('#hoUnk') || q('#hoUnk').checked;
+    n = (g ? g.n : h.carrier ? total - (unk ? unk.n : 0) : 0) + (unk && withUnk ? unk.n : 0);
+    md.el.querySelectorAll('[data-c]').forEach(b => b.classList.toggle('on', b.dataset.c === pick));
+    q('#hoN').textContent = num(n);
+    q('#hoRest').textContent = total - n > 0 ? `อีก ${num(total - n)} กล่องของขนส่งอื่นยังอยู่ในรายการ รอคนรถเจ้านั้นมารับ` : '';
+    q('#hoSignNote').textContent = `${pick} ยืนยันว่ารับพัสดุ ${num(n)} กล่องไปแล้ว`;
+    q('#hoDriver').value = q('#hoDriver').dataset.typed ? q('#hoDriver').value : lsGet('tmws.hoDriver.' + pick) || '';
+    q('#hoPlate').value = q('#hoPlate').dataset.typed ? q('#hoPlate').value : lsGet('tmws.hoPlate.' + pick) || '';
+  };
+  md.el.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { pick = b.dataset.c; update(); });
+  ['#hoDriver', '#hoPlate'].forEach(id => q(id).addEventListener('input', e => { e.target.dataset.typed = '1'; }));
+  if (q('#hoUnk')) q('#hoUnk').onchange = update;
+  update();
   let photo = '';
   q('#hoPhotoIn').onchange = async e => {
     const f = e.target.files && e.target.files[0]; if (!f) return;
@@ -1835,16 +1942,25 @@ function hoCloseDlg(){
   q('[data-x]').onclick = md.close;
   q('[data-ok]').onclick = async () => {
     const driver = q('#hoDriver').value.trim(), err = q('#hoCloseErr');
+    if (!pick) { err.textContent = 'เลือกขนส่งที่มารับ'; return; }
+    if (!n) { err.textContent = 'ไม่มีกล่องของ ' + pick; return; }
     if (!driver) { err.textContent = 'ใส่ชื่อคนรถ'; q('#hoDriver').focus(); return; }
     if (!photo) { err.textContent = 'ถ่ายรูปกองพัสดุกับคนรถ/รถขนส่งก่อน'; return; }
     if (pad.empty()) { err.textContent = 'ให้คนรถเซ็นชื่อก่อน'; return; }
     const ok = q('[data-ok]'); ok.disabled = true; ok.textContent = 'กำลังบันทึก…'; err.textContent = '';
     try {
       const plate = q('#hoPlate').value.trim();
-      const r = await run('hoClose', S.pin, h.id, { driver, plate, phone: q('#hoPhone').value.trim(), note: q('#hoNote').value.trim(), photo, sign: pad.data() });
-      lsSet('tmws.hoDriver.' + h.carrier, driver); lsSet('tmws.hoPlate.' + h.carrier, plate);
-      md.close(); toast(`ส่งมอบแล้ว ${num(r.count)} กล่อง ให้ ${r.carrier}`);
-      hoBack();
+      const r = await run('hoClose', S.pin, h.id, { carrier: pick, withUnknown: !q('#hoUnk') || q('#hoUnk').checked, expect: n,
+        driver, plate, phone: q('#hoPhone').value.trim(), note: q('#hoNote').value.trim(), photo, sign: pad.data() });
+      lsSet('tmws.hoDriver.' + pick, driver); lsSet('tmws.hoPlate.' + pick, plate);
+      md.close(); sfx('ok');
+      if (r.restId) {
+        // other couriers' parcels stay on screen in a new round for the next driver
+        toast(`ส่งมอบแล้ว ${num(r.count)} กล่อง ให้ ${r.carrier} · เหลือ ${num(r.rest)} กล่องของขนส่งอื่น`);
+        HO.cur = { id: r.restId, carrier: '', status: 'open' }; HO.items = []; HO.listAt = 0;
+        HO.msg = { cls: 'ok', text: `ส่งมอบให้ ${r.carrier} แล้ว · ที่เหลือรอขนส่งเจ้าอื่นมารับ` };
+        renderHo(); hoReloadCur();
+      } else { toast(`ส่งมอบแล้ว ${num(r.count)} กล่อง ให้ ${r.carrier}`); hoBack(); }
     } catch (e) { ok.disabled = false; ok.textContent = 'ยืนยันส่งมอบ'; err.textContent = errMsg(e); }
   };
 }
@@ -1887,7 +2003,7 @@ async function hoDetail(id){
   body.innerHTML = `<div class="ho-info">
       <div><span class="muted">ขนส่ง</span><b>${esc(h.carrier)}</b></div>
       <div><span class="muted">จำนวน</span><b class="mono">${num(ps.length)} กล่อง</b></div>
-      <div><span class="muted">ส่งมอบเมื่อ</span><b>${h.status === 'closed' ? hoTime(h.closedAt) : h.status === 'open' ? 'ยังไม่ได้ส่งมอบ' : 'ยกเลิก'}</b></div>
+      <div><span class="muted">${h.status === 'closed' ? 'คนรถเซ็นรับเมื่อ' : 'สถานะ'}</span><b>${h.status === 'closed' ? hoTime(h.closedAt) : h.status === 'open' ? 'สแกนแล้ว · ไม่มีลายเซ็นคนรถ' : 'ยกเลิก'}</b></div>
       <div><span class="muted">ผู้ส่งมอบ</span><b>${esc(h.closedBy || h.startedBy)}</b></div>
       <div><span class="muted">คนรถ</span><b>${esc(h.driver || '-')}</b></div>
       <div><span class="muted">ทะเบียน / เบอร์</span><b>${esc([h.plate, h.phone].filter(Boolean).join(' · ') || '-')}</b></div>
