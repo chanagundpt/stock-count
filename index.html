@@ -259,6 +259,13 @@ button.item.ho-row:focus-visible{outline:3px solid var(--accent);outline-offset:
 .ho-big .mono{font-size:44px;color:var(--accent)}
 label.ghost.ho-photo{display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 12px;font-size:15px;text-align:center;white-space:normal;border:1.5px dashed var(--accent);color:var(--accent);border-radius:var(--r)}
 .ho-photo img{max-width:100%;max-height:220px;border-radius:8px}
+.ho-thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px}
+.ho-thumbs:empty{display:none}
+.ho-thumb{position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;background:var(--bg)}
+.ho-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.ho-thumb button{position:absolute;top:4px;right:4px;width:28px;height:28px;border-radius:50%;border:0;background:rgb(0 0 0 / .6);color:#fff;font-size:14px;line-height:28px;padding:0}
+.ho-proof .ho-pics{display:flex;flex-wrap:wrap;gap:8px}
+.ho-proof .ho-pics img{max-width:calc(50% - 4px)}
 canvas.ho-sign{width:100%;height:170px;border:1.5px dashed var(--line);border-radius:var(--r);background:#fff;touch-action:none;display:block}
 .ho-info{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:14px}
 .ho-info span{display:block;font-size:12px}
@@ -962,7 +969,7 @@ function setupCameraControls(){
 function applyZoom(){
   const z = zoomSteps[zoomIdx];
   try { track.applyConstraints({ advanced: [{ zoom: z }] }); } catch {}
-  $('#zoomBtn').textContent = 'ซูม ' + z + 'x';
+  $('#zoomBtn').textContent = 'ซูม ' + z + 'x (อัตโนมัติ)';
 }
 $('#zoomBtn').addEventListener('click', () => { zoomIdx = (zoomIdx + 1) % zoomSteps.length; applyZoom(); });
 $('#torchBtn').addEventListener('click', () => {
@@ -972,13 +979,20 @@ $('#torchBtn').addEventListener('click', () => {
 });
 async function scanLoop(){
   const v = $('#scanVideo'), cv = document.createElement('canvas'), ctx = cv.getContext('2d', { willReadFrequently: true });
+  let frame = 0, readAt = Date.now(), zoomAt = Date.now();
   while (scanning) {
     if (v.readyState >= 2 && v.videoWidth) {
-      // read the framed band (90% × 50% of the picture, matching the white box), scaled to ≤1280px wide for speed
-      const w = v.videoWidth, hh = v.videoHeight, sw = w * .9, sh = hh * .5, k = Math.min(1, 1280 / sw);
+      // auto zoom (ผู้ใช้สั่ง 2 พ.ย.: small codes needed the zoom button) —
+      // every other frame reads only the middle of the picture at full resolution (= 2× digital zoom, works on every phone),
+      // the others read the framed band (90% × 50%, matching the white box) scaled to ≤1280px wide
+      const crop = ++frame % 2 === 0;
+      const w = v.videoWidth, hh = v.videoHeight, sw = w * (crop ? .45 : .9), sh = hh * (crop ? .25 : .5), k = Math.min(1, 1280 / sw);
       cv.width = Math.round(sw * k); cv.height = Math.round(sh * k);
       ctx.drawImage(v, (w - sw) / 2, (hh - sh) / 2, sw, sh, 0, 0, cv.width, cv.height);
       const code = await decodeCanvas(cv, ctx);
+      // phones with optical zoom: nothing read for 1.5 s → next zoom step (1× → 1.5× → 2× → 3× → 1×); it stays where a code was read
+      if (code) readAt = Date.now();
+      else if (zoomSteps.length > 1 && Date.now() - readAt > 1500 && Date.now() - zoomAt > 1500) { zoomAt = Date.now(); zoomIdx = (zoomIdx + 1) % zoomSteps.length; applyZoom(); }
       // handover: keep the camera open and take parcel after parcel (the same label held in view is read only once)
       if (scanFor === 'ho') {
         // the same code must come back on the next frame (≤ 0.8 s) before it counts — a misread almost never repeats
@@ -1714,14 +1728,14 @@ async function hoLoad(force){
 }
 // phones with the tab open start the JST check when the last one is over 15 minutes old (the trigger alone stopped on 2 Nov)
 async function hoTick(){
-  if (HO.ticking || Date.now() - HO.tickAt < 5 * 60e3) return;
+  if (HO.ticking || Date.now() - HO.tickAt < 150e3) return;
   HO.ticking = true; HO.tickAt = Date.now();
-  try { const r = await run('hoTick', S.pin); if (r && r.ran && !HO.cur) hoLoad(true); }
+  try { const r = await run('hoTick', S.pin); if (r && r.ran) { if (HO.cur) hoReloadCur(); else if (HO.tab === 'report') hoReportLoad(); else hoLoad(true); } }
   catch {} // older server: the trigger does it
   finally { HO.ticking = false; }
 }
 // called by the 8-second poll while the tab is open
-function hoPoll(){ if (HO.cur) { hoReloadCur(); hoIdxLoad(false); hoTick(); } else if (HO.tab !== 'report') hoLoad(false); }
+function hoPoll(){ hoTick(); if (HO.cur) { hoReloadCur(); hoIdxLoad(false); } else if (HO.tab !== 'report') hoLoad(false); }
 
 function renderHo(){
   $('#hoDash').hidden = !!HO.cur; $('#hoScanView').hidden = !HO.cur;
@@ -1759,7 +1773,7 @@ function renderHo(){
       <div class="t2"><span style="color:var(--ok)">ขนส่งรับแล้ว ${num(g.collected)}</span> · <span style="color:var(--warn)">ยังไม่ยืนยัน ${num(g.waiting)}</span></div></div>
       <span class="qty">${num(g.n)}</span></button>`).join('') + `</div>` : `<div class="empty">วันนี้ยังไม่ได้สแกน</div>`);
   html += `<div class="ho-check">${ck ? (ck.ok ? `เช็กกับ JST ล่าสุด ${hoTime(ck.at)} · รอยืนยัน ${num(ck.pending)} กล่อง${ck.complete === false ? ' (ยังเช็กไม่ครบ จะเช็กต่อรอบหน้า)' : ''}`
-      : `<span class="bad">เช็กกับ JST ไม่สำเร็จ ${hoTime(ck.at)}: ${esc(ck.error)}</span>`) : 'ยังไม่เคยเช็กกับ JST (ระบบเช็กเองทุก 15 นาที 08:00–21:00)'}
+      : `<span class="bad">เช็กกับ JST ไม่สำเร็จ ${hoTime(ck.at)}: ${esc(ck.error)}</span>`) : 'ยังไม่เคยเช็กกับ JST (ระบบเช็กเองทุก 5 นาทีขณะเปิดแท็บนี้ 07:00–21:00)'}
       <button class="ghost" data-act="check">เช็กตอนนี้</button></div>
     <p class="hint" style="margin-top:8px">ดูย้อนหลัง/กรองตามขนส่ง ช่องทางขาย สถานะ ได้ที่แท็บ "รายงาน"</p>`;
   if (HO.err) html += `<p class="hint bad">${esc(HO.err)}</p>`;
@@ -2101,7 +2115,11 @@ function hoCloseDlg(){
   const md = openModal(`<div class="modal-head">ให้คนรถเซ็นรับ (ไม่บังคับ)</div><div class="modal-body">
     <div class="field"><label>คนรถของขนส่งไหนมารับ?</label>
       <div class="chips ho-carriers" id="hoPick">${known.map(g => `<button type="button" class="chip" data-c="${esc(g.name)}">${esc(g.name)} <b>${num(g.n)}</b></button>`).join('')}</div>
-      ${unk ? `<label class="check"><input type="checkbox" id="hoUnk" ${known.length <= 1 ? 'checked' : ''}> รวมกล่องที่ยังไม่ทราบขนส่ง ${num(unk.n)} กล่องไปด้วย</label>` : ''}</div>
+      ${unk ? `<label class="check" id="hoUnkRow"><input type="checkbox" id="hoUnk" ${known.length <= 1 ? 'checked' : ''}> รวมกล่องที่ยังไม่ทราบขนส่ง ${num(unk.n)} กล่องไปด้วย</label>` : ''}</div>
+    <div class="field"><label>คนรถสแกนรับกล่องหน้าคลังแล้วหรือยัง?</label>
+      <div class="seg" role="group" id="hoMode"><button type="button" data-m="scanned">สแกนรับแล้ว</button><button type="button" data-m="all">ไม่ได้สแกนรับ</button></div>
+      <p class="hint" id="hoModeHint"></p>
+      <button type="button" class="ghost" id="hoRecheck" hidden>🔄 เช็ก JST อีกครั้ง</button></div>
     <div class="ho-big"><span class="mono" id="hoN">0</span> กล่อง</div>
     <p class="hint" style="text-align:center" id="hoRest"></p>
     <p class="hint" style="text-align:center">ให้คนรถนับกล่องให้ตรงกับจำนวนนี้ก่อนเซ็น</p>
@@ -2109,7 +2127,8 @@ function hoCloseDlg(){
     <div class="grid2"><div class="field"><label>ทะเบียนรถ</label><input type="text" id="hoPlate" autocomplete="off"></div>
       <div class="field"><label>เบอร์โทรคนรถ</label><input type="text" id="hoPhone" inputmode="tel" autocomplete="off"></div></div>
     <div class="field"><label>รูปถ่าย: กองพัสดุกับคนรถ/รถขนส่ง *</label>
-      <label class="ghost ho-photo" for="hoPhotoIn"><span id="hoPhotoTxt">📷 ถ่ายรูป</span><img id="hoPhotoImg" alt="" hidden></label>
+      <div class="ho-thumbs" id="hoThumbs"></div>
+      <label class="ghost ho-photo" for="hoPhotoIn"><span id="hoPhotoTxt">📷 ถ่ายรูป</span></label>
       <input type="file" id="hoPhotoIn" accept="image/*" capture="environment" hidden></div>
     <div class="field"><label>ลายเซ็นคนรถ * <button type="button" class="linkbtn" id="hoSignClr">ล้าง</button></label>
       <canvas id="hoSign" class="ho-sign"></canvas><p class="hint" id="hoSignNote"></p></div>
@@ -2117,26 +2136,63 @@ function hoCloseDlg(){
     <p class="hint bad" id="hoCloseErr"></p></div>
     <div class="modal-foot"><span style="flex:1"></span><button class="ghost" data-x>กลับไปสแกน</button><button class="ghost solid" data-ok>ยืนยันส่งมอบ</button></div>`, true);
   const q = s => md.el.querySelector(s), total = hoCount();
+  // scanned = the driver scanned at the warehouse → JST updates → sign only parcels JST shows as picked up (several trucks, part of the boxes each)
+  let mode = lsGet('tmws.hoMode.' + pick) || 'scanned', refreshing = false, refreshedAt = 0, picked = false;
+  const live = () => HO.items.filter(p => p.state !== 'error' && p.state !== 'sending');
+  const refresh = async () => {
+    if (refreshing) return; refreshing = true; update();
+    try {
+      const r = await run('hoRefresh', S.pin, h.id);
+      HO.items = r.parcels.filter(p => !p.void); refreshedAt = r.at || Date.now();
+      // nobody chose yet: pre-select the courier JST shows as having picked up the most boxes
+      if (!picked) {
+        const cnt = g => live().filter(p => p.jst === 'collected' && (carrierKey(p.carrier) || (p.carrier || '').toLowerCase()) === (carrierKey(g.name) || g.name.toLowerCase())).length;
+        const best = known.map(g => [g.name, cnt(g)]).sort((a, b) => b[1] - a[1])[0];
+        if (best && best[1]) pick = best[0];
+      }
+    } catch (e) { q('#hoCloseErr').textContent = /unknown function/.test(e.message) ? 'เซิร์ฟเวอร์ยังไม่รองรับ — อัปเดต Code.gs' : errMsg(e); }
+    refreshing = false; update();
+  };
   const update = () => {
-    const g = known.find(x => x.name === pick), withUnk = !q('#hoUnk') || q('#hoUnk').checked;
-    n = (g ? g.n : h.carrier ? total - (unk ? unk.n : 0) : 0) + (unk && withUnk ? unk.n : 0);
+    const g = known.find(x => x.name === pick), withUnk = !q('#hoUnk') || q('#hoUnk').checked, k = carrierKey(pick) || pick.toLowerCase();
+    const mineAll = live().filter(p => (carrierKey(p.carrier) || (p.carrier || '').toLowerCase()) === k || (!p.carrier && withUnk && mode !== 'scanned'));
+    n = mode === 'scanned' ? mineAll.filter(p => p.jst === 'collected').length
+      : (g ? g.n : h.carrier ? total - (unk ? unk.n : 0) : 0) + (unk && withUnk ? unk.n : 0);
+    md.el.querySelectorAll('[data-m]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.m === mode)));
+    if (q('#hoUnkRow')) q('#hoUnkRow').hidden = mode === 'scanned';
+    q('#hoRecheck').hidden = mode !== 'scanned';
+    q('#hoRecheck').disabled = refreshing;
+    q('#hoRecheck').textContent = refreshing ? 'กำลังเช็กกับ JST…' : '🔄 เช็ก JST อีกครั้ง' + (refreshedAt ? ' (ล่าสุด ' + fmtTime(refreshedAt) + ')' : '');
+    q('#hoModeHint').textContent = mode === 'scanned'
+      ? `นับเฉพาะกล่องที่ JST ขึ้นว่า ${pick} รับแล้ว (${num(n)} จาก ${num(mineAll.length)} กล่อง) — ที่เหลือรอรถคันถัดไป`
+      : `นับทุกกล่องของ ${pick} ที่สแกนออกและยังไม่มีคนรถเซ็น — ถ้ารถคันนี้รับไม่หมด ให้สแกนเฉพาะกล่องที่ขึ้นรถคันนี้`;
     md.el.querySelectorAll('[data-c]').forEach(b => b.classList.toggle('on', b.dataset.c === pick));
     q('#hoN').textContent = num(n);
-    q('#hoRest').textContent = total - n > 0 ? `อีก ${num(total - n)} กล่องของขนส่งอื่นยังอยู่ในรายการ รอคนรถเจ้านั้นมารับ` : '';
+    q('#hoRest').textContent = live().length - n > 0 ? `อีก ${num(live().length - n)} กล่องยังอยู่ในรายการ รอรถคันถัดไปมารับ` : '';
     q('#hoSignNote').textContent = `${pick} ยืนยันว่ารับพัสดุ ${num(n)} กล่องไปแล้ว`;
     q('#hoDriver').value = q('#hoDriver').dataset.typed ? q('#hoDriver').value : lsGet('tmws.hoDriver.' + pick) || '';
     q('#hoPlate').value = q('#hoPlate').dataset.typed ? q('#hoPlate').value : lsGet('tmws.hoPlate.' + pick) || '';
   };
-  md.el.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { pick = b.dataset.c; update(); });
+  md.el.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { pick = b.dataset.c; picked = true; mode = lsGet('tmws.hoMode.' + pick) || mode; update(); });
+  md.el.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { mode = b.dataset.m; lsSet('tmws.hoMode.' + pick, mode); update(); if (mode === 'scanned') refresh(); });
+  q('#hoRecheck').onclick = refresh;
   ['#hoDriver', '#hoPlate'].forEach(id => q(id).addEventListener('input', e => { e.target.dataset.typed = '1'; }));
   if (q('#hoUnk')) q('#hoUnk').onchange = update;
   update();
-  let photo = '';
+  if (mode === 'scanned') refresh();
+  // several photos (ผู้ใช้สั่ง 2 พ.ย.): each tap adds one; ✕ removes it
+  const photos = [], MAX_PHOTOS = 10;
+  const drawThumbs = () => {
+    q('#hoThumbs').innerHTML = photos.map((p, i) => `<div class="ho-thumb"><img src="${p}" alt="รูปที่ ${i + 1}"><button type="button" data-rm="${i}" aria-label="ลบรูปที่ ${i + 1}">✕</button></div>`).join('');
+    q('#hoThumbs').querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { photos.splice(Number(b.dataset.rm), 1); drawThumbs(); });
+    q('#hoPhotoTxt').textContent = photos.length >= MAX_PHOTOS ? `ครบ ${MAX_PHOTOS} รูปแล้ว` : photos.length ? `📷 ถ่ายเพิ่ม (${photos.length} รูป)` : '📷 ถ่ายรูป';
+  };
   q('#hoPhotoIn').onchange = async e => {
-    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const files = [...(e.target.files || [])].slice(0, MAX_PHOTOS - photos.length); e.target.value = '';
+    if (!files.length) return;
     q('#hoPhotoTxt').textContent = 'กำลังย่อรูป…';
-    try { photo = await shrinkImage(f, 1280, .72); q('#hoPhotoImg').src = photo; q('#hoPhotoImg').hidden = false; q('#hoPhotoTxt').textContent = '📷 ถ่ายใหม่'; }
-    catch { q('#hoPhotoTxt').textContent = 'อ่านรูปไม่ได้ ลองถ่ายใหม่'; }
+    for (const f of files) { try { photos.push(await shrinkImage(f, 1280, .72)); } catch { toast('อ่านรูปไม่ได้ ลองถ่ายใหม่'); } }
+    drawThumbs();
   };
   const pad = signPad(q('#hoSign'));
   q('#hoSignClr').onclick = pad.clear;
@@ -2144,22 +2200,23 @@ function hoCloseDlg(){
   q('[data-ok]').onclick = async () => {
     const driver = q('#hoDriver').value.trim(), err = q('#hoCloseErr');
     if (!pick) { err.textContent = 'เลือกขนส่งที่มารับ'; return; }
-    if (!n) { err.textContent = 'ไม่มีกล่องของ ' + pick; return; }
+    if (refreshing) { err.textContent = 'รอเช็กกับ JST ให้เสร็จก่อน'; return; }
+    if (!n) { err.textContent = mode === 'scanned' ? 'JST ยังไม่ขึ้นว่า ' + pick + ' รับกล่องไหน — รอคนรถสแกนรับ แล้วกด "เช็ก JST อีกครั้ง"' : 'ไม่มีกล่องของ ' + pick; return; }
     if (!driver) { err.textContent = 'ใส่ชื่อคนรถ'; q('#hoDriver').focus(); return; }
-    if (!photo) { err.textContent = 'ถ่ายรูปกองพัสดุกับคนรถ/รถขนส่งก่อน'; return; }
+    if (!photos.length) { err.textContent = 'ถ่ายรูปกองพัสดุกับคนรถ/รถขนส่งก่อน'; return; }
     if (pad.empty()) { err.textContent = 'ให้คนรถเซ็นชื่อก่อน'; return; }
     const ok = q('[data-ok]'); ok.disabled = true; ok.textContent = 'กำลังบันทึก…'; err.textContent = '';
     try {
       const plate = q('#hoPlate').value.trim();
-      const r = await run('hoClose', S.pin, h.id, { carrier: pick, withUnknown: !q('#hoUnk') || q('#hoUnk').checked, expect: n,
-        driver, plate, phone: q('#hoPhone').value.trim(), note: q('#hoNote').value.trim(), photo, sign: pad.data() });
+      const r = await run('hoClose', S.pin, h.id, { carrier: pick, withUnknown: mode !== 'scanned' && (!q('#hoUnk') || q('#hoUnk').checked), onlyCollected: mode === 'scanned', expect: n,
+        driver, plate, phone: q('#hoPhone').value.trim(), note: q('#hoNote').value.trim(), photos, photo: photos[0], sign: pad.data() });
       lsSet('tmws.hoDriver.' + pick, driver); lsSet('tmws.hoPlate.' + pick, plate);
       md.close(); sfx('ok');
       if (r.restId) {
         // other couriers' parcels stay on screen in a new round for the next driver
-        toast(`ส่งมอบแล้ว ${num(r.count)} กล่อง ให้ ${r.carrier} · เหลือ ${num(r.rest)} กล่องของขนส่งอื่น`);
+        toast(`ส่งมอบแล้ว ${num(r.count)} กล่อง ให้ ${r.carrier} · เหลือ ${num(r.rest)} กล่องรอรถคันถัดไป`);
         HO.cur = { id: r.restId, carrier: '', status: 'open' }; HO.items = []; HO.listAt = 0;
-        HO.msg = { cls: 'ok', text: `ส่งมอบให้ ${r.carrier} แล้ว · ที่เหลือรอขนส่งเจ้าอื่นมารับ` };
+        HO.msg = { cls: 'ok', text: `ส่งมอบให้ ${r.carrier} แล้ว · ที่เหลือรอรถคันถัดไปมารับ` };
         renderHo(); hoReloadCur();
       } else { toast(`ส่งมอบแล้ว ${num(r.count)} กล่อง ให้ ${r.carrier}`); hoBack(); }
     } catch (e) { ok.disabled = false; ok.textContent = 'ยืนยันส่งมอบ'; err.textContent = errMsg(e); }
@@ -2209,18 +2266,25 @@ async function hoDetail(id){
       <div><span class="muted">คนรถ</span><b>${esc(h.driver || '-')}</b></div>
       <div><span class="muted">ทะเบียน / เบอร์</span><b>${esc([h.plate, h.phone].filter(Boolean).join(' · ') || '-')}</b></div>
       ${h.note ? `<div style="grid-column:1/-1"><span class="muted">หมายเหตุ</span><b>${esc(h.note)}</b></div>` : ''}</div>
-    <div class="ho-proof"><figure><figcaption>รูปถ่าย</figcaption><img id="hoDetPhoto" alt="รูปถ่ายตอนส่งมอบ" hidden><span class="muted" id="hoDetPhotoT">${h.hasPhoto ? 'กำลังโหลดรูป…' : 'ไม่มี'}</span></figure>
+    <div class="ho-proof"><figure><figcaption>รูปถ่าย${(h.photoCount || 0) > 1 ? ` (${h.photoCount} รูป)` : ''}</figcaption><div class="ho-pics" id="hoDetPhotos"></div><span class="muted" id="hoDetPhotoT">${h.hasPhoto ? 'กำลังโหลดรูป…' : 'ไม่มี'}</span></figure>
       <figure><figcaption>ลายเซ็นคนรถ</figcaption><img id="hoDetSign" alt="ลายเซ็นคนรถ" hidden class="sig"><span class="muted" id="hoDetSignT">${h.hasSign ? 'กำลังโหลด…' : 'ไม่มี'}</span></figure></div>
     <div class="tbl"><table><thead><tr><th>#</th><th>เลขพัสดุ</th><th>สแกน</th><th>สถานะใน JST</th></tr></thead><tbody>` +
     ps.map((p, i) => `<tr><td class="n">${i + 1}</td><td class="mono">${esc(p.tracking)}</td><td>${hoTime(p.at)}<br><span class="muted">${esc(p.by)}</span></td>
       <td>${hoJstPill(p)}${p.jstText && p.jst !== 'missing' ? `<br><span class="muted">${esc(p.jstText)}${p.jstCarrier ? ' · ' + esc(p.jstCarrier) : ''}</span>` : ''}${p.follow ? `<br>📝 ${esc(p.follow)}` : ''}</td></tr>`).join('') +
     `</tbody></table></div>`;
-  const imgs = {};
+  const imgs = { photos: [] };
   const load = async (which, img, txt) => {
     try { const d = await run('hoFile', S.pin, h.id, which); if (d) { imgs[which] = d; const el = md.el.querySelector(img); el.src = d; el.hidden = false; md.el.querySelector(txt).hidden = true; } }
     catch { md.el.querySelector(txt).textContent = 'โหลดรูปไม่ได้'; }
   };
-  await Promise.all([h.hasPhoto && load('photo', '#hoDetPhoto', '#hoDetPhotoT'), h.hasSign && load('sign', '#hoDetSign', '#hoDetSignT')]);
+  const loadPhotos = async () => {
+    const n = h.photoCount || (h.hasPhoto ? 1 : 0), got = await Promise.all(Array.from({ length: n }, (_, i) => run('hoFile', S.pin, h.id, 'photo', i).catch(() => '')));
+    imgs.photos = got.filter(Boolean); imgs.photo = imgs.photos[0];
+    md.el.querySelector('#hoDetPhotos').innerHTML = imgs.photos.map((d, i) => `<img src="${d}" alt="รูปถ่ายตอนส่งมอบ ${i + 1}">`).join('');
+    const t = md.el.querySelector('#hoDetPhotoT');
+    if (imgs.photos.length) t.hidden = true; else t.textContent = 'โหลดรูปไม่ได้';
+  };
+  await Promise.all([h.hasPhoto && loadPhotos(), h.hasSign && load('sign', '#hoDetSign', '#hoDetSignT')]);
   const pb = md.el.querySelector('[data-print]'); pb.disabled = false;
   pb.onclick = () => hoPrint(h, ps, imgs);
 }
@@ -2236,7 +2300,7 @@ function hoPrint(h, ps, imgs){
     <div>ส่งมอบเมื่อ: <b>${esc(hoTime(h.closedAt))}</b></div><div>ผู้ส่งมอบ (2NK): <b>${esc(h.closedBy)}</b></div>
     <div>คนรถ: <b>${esc(h.driver)}</b></div><div>ทะเบียน / เบอร์: <b>${esc([h.plate, h.phone].filter(Boolean).join(' · ') || '-')}</b></div>
     ${h.note ? `<div>หมายเหตุ: ${esc(h.note)}</div>` : ''}</div>
-    <div class="p">${imgs.photo ? `<img src="${imgs.photo}" alt="รูปถ่าย">` : ''}${imgs.sign ? `<div><div>ลายเซ็นคนรถ (ยืนยันรับ ${ps.length} กล่อง)</div><img src="${imgs.sign}" alt="ลายเซ็น" style="max-width:100%"></div>` : ''}</div>
+    <div class="p" style="flex-wrap:wrap">${(imgs.photos || []).map((d, i) => `<img src="${d}" alt="รูปถ่าย ${i + 1}">`).join('')}${imgs.sign ? `<div><div>ลายเซ็นคนรถ (ยืนยันรับ ${ps.length} กล่อง)</div><img src="${imgs.sign}" alt="ลายเซ็น" style="max-width:100%"></div>` : ''}</div>
     <table><thead><tr><th>#</th><th>เลขพัสดุ</th><th>เวลาสแกน</th><th>ผู้สแกน</th></tr></thead><tbody>
     ${ps.map((p, i) => `<tr><td>${i + 1}</td><td class="m">${esc(p.tracking)}</td><td>${esc(hoTime(p.at))}</td><td>${esc(p.by)}</td></tr>`).join('')}</tbody></table>
     <script>setTimeout(function(){print()},400)<\/script></body></html>`);
