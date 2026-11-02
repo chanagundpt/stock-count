@@ -213,6 +213,11 @@ button.ghost:disabled{opacity:.5}
 .role.user{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
 .role.handover{background:var(--warn-soft);color:var(--warn)}
 body.ho-only nav.tabs,body.ho-only #roundChip,body.ho-only #sync{display:none!important}
+/* handover tab only: its own name, no counting-round chip / product sync line (they belong to stock counting) */
+.logo .lg-ho{display:none;letter-spacing:.08em}
+body.v-ho .logo .lg-main,body.v-ho #roundChip,body.v-ho #sync{display:none!important}
+body.v-ho .logo .lg-ho{display:inline}
+body.v-ho:not(.ho-only) #meBtn{margin-left:auto}
 body.ho-only .wrap{padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
 .ho-only-name{margin-left:auto;font-size:13px;font-weight:600;color:var(--muted)}
 .off{color:var(--bad);font-size:12px;font-weight:600}
@@ -264,11 +269,14 @@ canvas.ho-sign{width:100%;height:170px;border:1.5px dashed var(--line);border-ra
 .ho-tabs button{flex:1;font-size:15px;padding:9px}
 button.primary.ho-start{width:100%;font-size:20px;padding:18px}
 .chip.unk{border-style:dashed;color:var(--warn)}
+.ho-range{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.ho-range input{width:100%;font:inherit;font-size:16px;padding:9px 10px;border:1.5px solid var(--line);border-radius:var(--r);background:var(--bg);color:var(--ink);min-width:0}
+.ho-range .field span{font-size:13px;font-weight:600;color:var(--muted)}
 .chip.miss{border-style:dashed;border-color:var(--bad);color:var(--bad)}
 .ho-miss{border-left:4px solid var(--warn);background:var(--warn-soft);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px;margin-top:12px}
 .ho-pop{position:fixed;left:50%;top:42%;transform:translate(-50%,-50%);z-index:200;min-width:240px;max-width:calc(100% - 40px);padding:20px 22px 18px;border-radius:20px;
   text-align:center;color:#fff;box-shadow:0 18px 50px rgb(0 0 0 / .4);pointer-events:none}
-.ho-pop.ok{background:#178a50} .ho-pop.warn{background:#c77700} .ho-pop.dup{background:#7a3db8} .ho-pop.bad{background:#c0281e}
+.ho-pop.wait{background:#34506e} .ho-pop.ok{background:#178a50} .ho-pop.warn{background:#c77700} .ho-pop.dup{background:#7a3db8} .ho-pop.bad{background:#c0281e}
 .ho-pop-i{font-size:46px;font-weight:700;line-height:1}
 .ho-pop-t{font-size:22px;font-weight:700;margin-top:6px;line-height:1.3}
 .ho-pop-s{font-size:14px;opacity:.92;margin-top:4px;overflow-wrap:anywhere}
@@ -288,7 +296,7 @@ button.primary.ho-start{width:100%;font-size:20px;padding:18px}
 <body>
 <div class="wrap">
   <header class="top">
-    <h1 class="logo"><img alt="2NK" width="59" height="28" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALAAAABUCAYAAAAiYr3KAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAABG0SURBVHhe7V1rkGVXVe5JoqCOCgntZLrPWWvte28YbGeSTN+z9z49GWgRgzwCPsoxpAQToYhEg4pIoVAylqYg/hCsqBUBDY8fQHgUFUQSSKmhKAhJlZFHIuQxMxiIeY5JZDKTTDIz1tr73J5z9u2+fc85+zy6+35V34/puXetvff9zj5rv9aemppgggnyA3Hx2dPTi5u3bDn7J9J0PzfBBI1h27ZdP4kozwSIz0NU7wCS1yDqjwLJjyOpryKqWxHl1xPewgSSn0WUH0WUHwFSewHkSxAXz2Rbrv2VsLi4eJr1O781L8Nw1wzAC7e6NtuFPacKobdwWVdjcFY8y3T/3un0f9q16hthuHMGIOoww3C+G/Ysu92dvTT5b4PPASiRpf07ov7ZOso81en0AVFeRqTegyTvQFKHkOQzJOITorMrxYUVePIz/B0kdRxJs407iOJ3Iapf6ff7P+L6TaPTWdgOqB4kwd9j/7n4BIn4CUT5TtduW3BWEM8iqX2mnKRyU3QWnghRXeXa9YlZjF5OIr4fSR1GkoeB5JFR5M+sTP00kb4Xsf8C148XEEXbqBNfDCT/jUjfZ4TYtQIkoQ2RVEHa77OtTvc8+zehv4so/wpRxW5ZGETqHED1pOic9J+P/ODoo4j6513bbUB3JgqR1MPczsNlX52d7q4TIaoPunZ9AaB/Hgn9aNHypck2kNRTiNHLXT+lEATxj2FHvyJE+Skk9aDpMU2BTa9ZIbli3Jubih1D1J8MQxnxa3VQNiH02YDqh9wAw98fj4n9ezisyNa8efRmVYCk/qdoW3PdAOU/uHZ9IAjmdxDp7yftV4rm9xP6GED/Da6fwuCBFgp9GQn91UFYULQhy5IryL0ykLqf46VBGX0ImMl1A4qu7/Ve9qxsKzSLtgqYX/Ek4gM+xMsdFbc/ovwT108hzE3PbQaIfg9QfXcQrw47rZ9WpPJxIeTzB2XlEAJRHSorYCbXMyT59mxrNIs2ChhRE5H6Lz+6sGEOkPpr108RnIqoLgJStzXZ267ERMAHOx191qDAPgVsbcRHvcdgJdA2AZ/ZO3caUN1iesxl/OUlj58Q1QempqY2ub5yASCeR6FvMIMxL0+Wf1YtYCbXHUgd2NJZ+JlsCzWDNgkYcfE5gOoGPz3vIGxTn3H95IIZoJlRvj7k66mqinUImGl7BXldr9drPB5ukYA3IaoP+tJI8hDcmGfOfwhBIF/Eiww2XPAngKpYl4CZJh5G+efZFqsfbREwx6hWvOXbORHv7enBeC7w0i5R9Ack9GFfr4M6WKeA2R4JfSSk+ZdmW69etEHAKPRbfXVyJIzeHuoE0XbXz9hAVFfxlJSPAtXJOgXMTBr7gSCIe9kWrA9NCxhAXe5LvLzYhKR/GJB8kesnF3i+zVcsUyfrFjDTDDRQ3ZBtwfrQpICB5BtJ6GfQQ9uayQERHwIxf4HrJzc4cAaSB+wTMezMD7nS2aXCsvFTEwJmGhFAdEW2FetBUwIGIS/g1c+iftNMxHscRPRa109hIKrX+41/7Vo201baCgpQPsA/gFlBI3U0vTyct3GaEvDgAQxF9KpsK1aPJgTMcT+SfriozzRt25kB8R+5fkqBd3kBym+VE/FAjEuj01sR1ScA5G8GIt4RBNF23rHW7UYhE3HhBfx3XixBs69C32s3Ao0nvqYEzDQ/ptD7eHtitiWrRd0C5u2MJNSBJP4vSdupAcq/cf14AQutqIBTPeg+FPqdROqlU1OLp7k+RsHsAaX4CiRltmC6Plw2KWBmMvH+tV5P/VS2JtWhTgFzZ0Okv11UEy7NEjGqT/CebdeXF9hFDF4WHL/AVrj6hBD6i4j6krm5uR917eYFCPVKpPiB1X6kpgXMtJtO1F9ma1Ad6hLwzIw8A0h/jUXn2ijCZH/D9XwSx/XlFYj615LpjaFCpDmIWxHlV4jkLy3m7G1XA2L/FUj6yVFCbIOAk7DpGQ6DsjWoBnUIeHp6bjMKdZMY7MEuSfOmEuqms+s5NrZ4GpC8eeVeeGmr2/dB9C+v7HVgV3uuHrUPox0C5v0SRkwPbMFzKFsD/6hawFu39n8cSX3O17SqmTMm/R8Au5/r+qoModDn81EOtxfmRmOGKN8/MxOF7vd8gyheHDV4aIuAmckDfyMLIFsLv6hYwKcgqg/7ChuSNtnHZ+JcR5UDUH4x3QsnMwt3IurXuJ+tCt1u3EOUK8bCbRIw026wl+/N1sIvqhQwkXxvUbsuEzsHEfvNHM2aRfVipPjJpVhXxNfxaV/3c1WCezNAdetKvXDbBMwrVCSq3T9clYAB+pcPBuTud/KSbZCIj4UUXej6qRWI6tpkqmivj9mFvDDH41HetdKP1ToBL4VZ+iBitDNbGz+oQsDcSyKpp4vazDA5jAkQXZr20Qhm+YSvUHvcv9cF6Oo+zwm7sfiAbRQw0z708uYqHvpqBBy93r7lyrWZ6XnNtlP1h2n7GxZA+lIaMRpuq4CZZhM8yb/L1qg8fAiYB+FpmwDRa629Mm2WHIPH6C/Stjc0AOXXV57Oa7eA2b8RSygvztaqHHwImE9SpG0CqdcVtXfSrgk1/z5td0MDUb4MhX56lBDbLGBmEg/flz41XRZtFHASMv1LqeNA6w1I8iujel9mlQIu84OmmfRM/9nr9bzsl2ibgJPf6FtCbN+StrmhEVL/d1YTL7MKAZvvofoSkvz0OGUYh2bgRNLL69WHgH3FwPZh0Hfypp+0vQ0Nzg5JQt8/zg9UiYB5LpTkxzkDJHpKk2QGOBxOUPl42IeA3VmIIgJmOyTi/Zw5Mm1rQ8PshiP5r+Ouw1clYI7n2BbH4ZwFsqitjF0rkMfLzg+3QcDJZx8GmJ9P29nwAJJ/lqfHq1rAjBDVW/KUaRRtr6Vv5gd1qdI50bSAbbvqxxDnX5y2seHBuX9JjN4+6bIOAXNyP/73uG+F1ch2QowKpzdtXsAxf/97e/dOnZK2saEBEP0iJ7LOe6i0DgEzeHM3Ck5smK98y9Meu0LsF9o/7EPAZQdxorNwDEi+L21jwwI68Xn8Slppw84o1iVgRhj2z6fkVLX7nbwcxMMAuu/6WQ0+BFymB7Y0nzsGoH4hbWfDodOJtiOpu4vGmHUKmAGk3la0rC6To0i35D1iU4mAC8wD23aQ+9qYBLwWAKg5Iv2dMoKoW8AMvojGVzxsNo5jxKlEx0YVAg5J/VYRe/a0hbo6bWtDIAzlz/FdF2XEy2SRAslHfSa4Xk3AfBKFJ+/Lln1AYwflZa6fldAmAdv5bTNv/htpe+saJmxIMr0PN0g+GgGjeqzXO3lkpWoBM4Kgr5Dix4r96I4/G3s+Aj015/pZDlUIuEgIcdIe58dQ39u6tf+8tM11CZtnQH3H1ys42WdwdfqSlzoEzACI3pYcsxqykZdJPHz7OCKoRMC5B3GuTbN19NNpm+sO5oIYVDf66HmZJoMPqet7p2eTitQlYD4ACSQ/5u9hHJ7eWg4+BOz6KStgps111v/1tN11gzP41k7Sn/f3Y9uj2nwbpOurRgHb+WGUdxeZAlyOfDw/RPkm108aPgSc3EGxBB8CTubIH6vsQsKmwGmXgNQX/B3VNq/tu1fK0VungBlhqHejt/0SbEM/xZcFun4G8CTg7HZKDwJO2f5cOqRb0zjjjG3c8/6zv56Xezq9f2bEBvG6BcwAkm9OyjZkLy/ZDpG+FfGc57h+GF4ETPIf0zZ9CdjaN0vl6+FM3IlNRPKzS1fElqT5YYX6wWrb98pedFhEwJzZMwT5GX91NZmPeFA0dNVU2wWcvEUeDzolrgxoA/hmetHx9YOaXVz38fSV68dFEwJmBEF8Op+88BUPm9kCMXzNahUCRox+28ep5AGTWZUvV5l2rEqcAig/4rU3Iv0QQLTLdbQcmhIwQ4hI8uXURcWVKYc5T6eOcHqttA8fAgaS/5S2yfdNA/op94BJPPyOtJ+1gE1E6hqfAzYifU/QWRj7ddSkgBm+42FA+c1eb/f0wH4VAmYAyDdz3d3PF+VgQNoxl7GvEaDw2fOasOHuvCd6mxYwg0h9yMfANanD8fSsRFUCton9OB9e+XIPaNoS1G1BMHe666x1QFTv99rzCnWgyJxiGwQcBPFsmV12S2WxS+VPIcqFge0KBTxFtICAasVkikXIvyVQ9B7XV6sApN9X9scaMAkb9ndXmOddDW0QMIPPvtl9zsXFULeAGZyo21cIxOQ6kIiPNHEhzliwV476qfBgkWJmJl/YkEZbBMwAiP64zCu5KgG7sxAuQlQfKFNul4nPu+bm8u19rhycCzcR3VCh8zKJefcj7hw5z7sa2iRgBvd2RcXQlIA5mzqYTVd+3qpME0qg+vByc9tNYBOBTMKGYkLJVo5Fow4QRdtcR3nhQ8BI8vOu3aKYm5vbDEJ+o4gYmhIwI+zo3Uj6aNF2HKY9C9hkttMlAMl3d7hX8VA5O2DT98x2zl06VVEGbRMwgwVIQh/KK7omBcxAjK4s+vZYjslD/IPCt9L7AJD8fTvJXkwg2QqxeOP9AOeOtZl7HLRRwAzOypN3nrVpAfd6vWfxPXhF3h4r0YYS0bWur1pgJruFPl608bIVMeHHfxeZKhuFtgqYwfuH88yTNy1gBq/SmRXBgv6Wow0Z5RtdX5WCe14k/UxRYbgVIKH3zc76CRvSaLWAYcdzUaiROY8zZalIwKOm0ZYDonzTuGUeh8k9hI/UdnsRL4/anreYKLKFNzHvvtV2lRWFDwH7nIVwIURfjdujJQI+mt4H0oSAp/aa67e83R3HtKGE/FLe64hzg0eNJPSxog2WLTQ/xfE3O54GbMuhif3AeUGkLxWd+PhqMzitEbB5e8xvRVL3Jpc6eqG9tV69xfXlDZzyiYQ6WLSx0jTiFfobM91qL0j0JOAvuHZ9g/MFr9ajtUnAjMCs0pnX/5DdIrR14BMoFWS5BJAvIRE/7CP24QN/iOqmOm51XysC3vr8/vN4p9mo9m2bgBkAqz94eWjLo/6dkyi6vgrD9rz64KjGHZdGSGYgEv0pkfplouhCf9QXIspfTd/NsFYEzOAlc77NciUxtlHA3AkhqW/70MaAfMIcQF3h+ioEIUzY8KivkwUDcoPzk+uTdkpKHkdcWJqKW0sCZoBQb7BiGC5vGwXMMANR0keKtrFLtkNCHxn30MKK4FjEV9hQB20Dyv+tIDdabQJm8H1y/EAOlaUyAatrsiXID4DoXcuVuSgTzd1eKszkM10+C1U114uAOWM7kLrFbfs2C9hsgCfpLVEN09QfoytdR2MDSd1ZtGGa4HoRMINoXiOp/0u3fyLgChYyvAh4KgjmdyBxWxcryxBtKHEiDPX5rq+xgCTv8FaYGpgIOJNete0LGaPAA1I7527LXp2Ay8XAaaDge5Z9Tq2ZbJ13Fco7vFYFPLtOBMxAlH9r71leGwJmAKpr3fCnDG0okU1AOBbWpoDVI0H35PEjK2C5hgW8+GxAdRMLba0I2OSIM+Gnp3jYHkN6Ogxz5h2eCLh5ATN4WpDvYTNiWwMCZoQUvdqUqWC7u7SbqvT+cVLOLmEi4Gp3o+VBgP2Lkh7t2FoQMANQXel/VkJ9cs+eqfGSBU4E3B4BMxDVVZzC3/80WjUCNtOBoG7zJ2IOJcysyetcX8tiIuB2hBADmGVbUF/mK2+X/tZiATOE2Hk2Cf1o0fZ3mdTz4FjJAicCbpeAGSZJCmoa/LvtAmYQybd7n5UQ6jrXzxDWg4B5IQNQHbb14P/PR7LHv2/Itkx70J2JQkD14MlskvnIYgCKPuTa9Yk9U3tO5esfTop4uBx5yVmf+MFwfWXAT3a390Lz4bXAbm+3aaAZ2rV0HF+IeAeiOsz7VlngeWl2RjWwEjcuej0VIKqHBtNseckboKrugRmc3wNJ3Ve0nC6TN8eRIBiR6BFRXoJCvxVRrg2aska/i7i4lM18enpuM1H0ak6RNLz9cnVysmdEFWdbpj0w88QgLwBhynnR+NSvYfKACFGe69qtAuZAKMmLB74HHLQ1YpT5u/v/adrPykv4Dev6mWCCCSaYYIIJJsiB/weS5VbGmTMA8wAAAABJRU5ErkJggg=="><span>STOCK COUNT</span></h1>
+    <h1 class="logo"><img alt="2NK" width="59" height="28" src="data:image/png;base64,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"><span class="lg-main">STOCK COUNT</span><span class="lg-ho">ส่งมอบสินค้า</span></h1>
     <button class="roundchip none" id="roundChip" type="button">กำลังโหลด…</button>
     <button class="avatar" id="meBtn" type="button" aria-label="บัญชีของฉัน" hidden>?</button>
   </header>
@@ -606,6 +614,8 @@ function toast(msg){ const t = $('#toast'); t.textContent = msg; t.hidden = fals
 function setView(v){
   if (hoOnly()) v = 'ho';
   S.view = v;
+  document.body.classList.toggle('v-ho', v === 'ho');
+  document.title = v === 'ho' ? '2NK ส่งมอบสินค้า' : '2nk Stock count';
   for (const id of ['count','ho','sum','jst','exp','rounds']) $('#v-' + id).hidden = id !== v;
   document.querySelectorAll('nav.tabs button').forEach(b => { if (b.dataset.v === v) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
   render();
@@ -1667,7 +1677,7 @@ $('#meBtn').addEventListener('click', openUserMenu);
 // สแกนทุกกล่องตอนยกให้ขนส่ง → คนรถเซ็น + ถ่ายรูป = ใบส่งมอบ; ระบบเช็กกับ JST ทุก 15 นาทีว่าขนส่งสแกนรับแล้วหรือยัง
 // การสแกนส่งเข้าคิวทีละรายการ (ไม่ต้องรอเซิร์ฟเวอร์ตอบก่อนสแกนกล่องถัดไป)
 const HO = { list: null, loading: false, err: '', cur: null, items: [], pumping: false, listAt: 0, msg: null,
-  tab: 'home', rep: null, repLoading: false, rejected: new Map(), idx: new Map(), idxAt: 0, idxLoading: false, f: { days: 7, carrier: '', shop: '', status: '', q: '' } };
+  tab: 'home', rep: null, repLoading: false, rejected: new Map(), idx: new Map(), idxAt: 0, idxLoading: false, tickAt: 0, ticking: false, f: { days: 7, carrier: '', shop: '', status: '', q: '' } };
 const hoTime = ms => ms ? fmtTime(ms) : '-';
 const hoHours = ms => Math.max(0, Math.floor((Date.now() - ms) / 3600e3));
 function hoJstPill(p, alertHours){
@@ -1680,15 +1690,27 @@ function hoJstPill(p, alertHours){
 async function hoLoad(force){
   if (HO.loading || (!force && Date.now() - HO.listAt < 20e3)) return;
   HO.loading = true;
-  try { HO.list = await run('hoList', S.pin); HO.err = ''; HO.listAt = Date.now(); }
+  try {
+    HO.list = await run('hoList', S.pin); HO.err = ''; HO.listAt = Date.now();
+    const ck = HO.list.check;
+    if (!ck || Date.now() - ck.at > 15 * 60e3) hoTick();
+  }
   catch (e) {
     if (e.message === 'AUTH_REQUIRED') { authLost(); return; }
     HO.err = /unknown function/.test(e.message) ? 'เซิร์ฟเวอร์ยังไม่รองรับการส่งมอบ — ผู้ดูแลต้องอัปเดต Code.gs ใน Apps Script ก่อน' : errMsg(e);
   }
   finally { HO.loading = false; renderHo(); }
 }
+// phones with the tab open start the JST check when the last one is over 15 minutes old (the trigger alone stopped on 2 Nov)
+async function hoTick(){
+  if (HO.ticking || Date.now() - HO.tickAt < 5 * 60e3) return;
+  HO.ticking = true; HO.tickAt = Date.now();
+  try { const r = await run('hoTick', S.pin); if (r && r.ran && !HO.cur) hoLoad(true); }
+  catch {} // older server: the trigger does it
+  finally { HO.ticking = false; }
+}
 // called by the 8-second poll while the tab is open
-function hoPoll(){ if (HO.cur) { hoReloadCur(); hoIdxLoad(false); } else if (HO.tab !== 'report') hoLoad(false); }
+function hoPoll(){ if (HO.cur) { hoReloadCur(); hoIdxLoad(false); hoTick(); } else if (HO.tab !== 'report') hoLoad(false); }
 
 function renderHo(){
   $('#hoDash').hidden = !!HO.cur; $('#hoScanView').hidden = !HO.cur;
@@ -1736,8 +1758,15 @@ const HO_STATUS = [['', 'ทุกสถานะ'], ['open', 'ยังไม�
 // open the report with filters already set (from a tile or a courier row on the home screen)
 function hoGoReport(o){
   Object.assign(HO.f, { days: 7, carrier: '', shop: '', status: '', q: '' }, o);
+  hoSetDays(HO.f.days);
   HO.tab = 'report'; HO.rep = null; window.scrollTo(0, 0); hoReportLoad();
 }
+// report period: f.from / f.to = 'YYYY-MM-DD' (local date); f.days = the quick button that set it (0 = picked by hand)
+const HO_REP_MAX_DAYS = 120;
+const hoYmd = ms => { const d = new Date(ms); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+function hoSetDays(n){ const f = HO.f; f.days = n; f.to = hoYmd(Date.now()); f.from = hoYmd(Date.now() - (n - 1) * 864e5); }
+// days the server has to send back so the period is covered
+const hoDaysBack = () => Math.min(HO_REP_MAX_DAYS, Math.ceil((Date.now() - new Date(HO.f.from + 'T00:00:00').getTime()) / 864e5) + 1);
 // set innerHTML only when it changed: the 8-second refresh used to rebuild the filters and close an open picker
 function hoPaint(el, html){
   if (el._html === html) return false;
@@ -1746,15 +1775,17 @@ function hoPaint(el, html){
 async function hoReportLoad(){
   if (HO.repLoading) return; HO.repLoading = true; renderHo();
   try {
-    const r = await run('hoReport', S.pin, HO.f.days);
-    HO.rep = { days: HO.f.days, at: Date.now(), rows: r.rows.map(x => Object.fromEntries(r.cols.map((c, i) => [c, x[i]]))) };
+    if (!HO.f.from) hoSetDays(HO.f.days || 7);
+    const need = hoDaysBack(), r = await run('hoReport', S.pin, need);
+    HO.rep = { days: need, at: Date.now(), rows: r.rows.map(x => Object.fromEntries(r.cols.map((c, i) => [c, x[i]]))) };
   } catch (e) { HO.rep = { err: errMsg(e), rows: [] }; }
   finally { HO.repLoading = false; renderHo(); }
 }
 function hoRepStatus(p){ return p.jst || 'none'; }
 function hoRepFiltered(){
-  const f = HO.f, q = f.q.trim().toUpperCase(), from = f.days === 1 ? new Date().setHours(0, 0, 0, 0) : 0;
-  return (HO.rep ? HO.rep.rows : []).filter(p => (!from || p.at >= from)
+  const f = HO.f, q = f.q.trim().toUpperCase();
+  const from = f.from ? new Date(f.from + 'T00:00:00').getTime() : 0, to = f.to ? new Date(f.to + 'T23:59:59.999').getTime() : Infinity;
+  return (HO.rep ? HO.rep.rows : []).filter(p => p.at >= from && p.at <= to
     && (!f.carrier || (carrierKey(p.carrier) || p.carrier) === f.carrier)
     && (!f.shop || (p.shop || '(ไม่ระบุ)') === f.shop)
     && (!f.status || (f.status === 'issue' ? p.issue : f.status === 'open' ? hoRepStatus(p) !== 'collected' : hoRepStatus(p) === f.status))
@@ -1762,6 +1793,8 @@ function hoRepFiltered(){
 }
 function renderHoReport(el){
   const f = HO.f, R = HO.rep;
+  if (!f.from) hoSetDays(f.days || 7);
+  const today = hoYmd(Date.now()), minDay = hoYmd(Date.now() - (HO_REP_MAX_DAYS - 1) * 864e5);
   const all = R ? R.rows : [], rows = hoRepFiltered();
   const opts = (list, cur, allLabel) => `<option value="">${allLabel}</option>` + list.map(([v, t]) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(t)}</option>`).join('');
   const carriers = [...new Map(all.map(p => [carrierKey(p.carrier) || p.carrier, p.carrier || 'ไม่ทราบขนส่ง'])).entries()];
@@ -1769,7 +1802,11 @@ function renderHoReport(el){
   const stRows = (() => { const keep = f.status; f.status = ''; const r = hoRepFiltered(); f.status = keep; return r; })();
   const cnt = k => stRows.filter(p => k === 'issue' ? p.issue : hoRepStatus(p) === k).length;
   let html = hoTabs() + `<div class="card ho-filters">
-    <div class="seg" role="group">${[[1, 'วันนี้'], [7, '7 วัน'], [30, '30 วัน']].map(([d, t]) => `<button type="button" data-days="${d}" aria-pressed="${f.days === d}">${t}</button>`).join('')}</div>
+    <div class="seg" role="group">${[[1, 'วันนี้'], [7, '7 วัน'], [30, '30 วัน']].map(([d, t]) => `<button type="button" data-days="${d}" aria-pressed="${f.days === d && f.to === today}">${t}</button>`).join('')}</div>
+    <div class="ho-range">
+      <label class="field"><span>ตั้งแต่วันที่</span><input type="date" data-d="from" value="${f.from}" min="${minDay}" max="${today}"></label>
+      <label class="field"><span>ถึงวันที่</span><input type="date" data-d="to" value="${f.to}" min="${minDay}" max="${today}"></label>
+    </div>
     <div class="ho-fgrid">
       <label class="field"><span>ขนส่ง</span><select data-f="carrier">${opts(carriers, f.carrier, 'ทุกขนส่ง')}</select></label>
       <label class="field"><span>ช่องทางการขาย</span><select data-f="shop">${opts(shops, f.shop, 'ทุกช่องทาง')}</select></label>
@@ -1796,7 +1833,14 @@ function renderHoReport(el){
   const focused = document.activeElement && document.activeElement.dataset && document.activeElement.dataset.f === 'q', pos = focused ? document.activeElement.selectionStart : 0;
   if (!hoPaint(el, html)) return;
   hoBind(el);
-  el.querySelectorAll('[data-days]').forEach(b => b.onclick = () => { f.days = Number(b.dataset.days); if (!HO.rep || (HO.rep.days || 0) < f.days) hoReportLoad(); else renderHo(); });
+  const reload = () => { if (!HO.rep || HO.rep.err || (HO.rep.days || 0) < hoDaysBack()) hoReportLoad(); else renderHo(); };
+  el.querySelectorAll('[data-days]').forEach(b => b.onclick = () => { hoSetDays(Number(b.dataset.days)); reload(); });
+  el.querySelectorAll('input[data-d]').forEach(x => x.onchange = () => {
+    if (!x.value) return;
+    f[x.dataset.d] = x.value < minDay ? minDay : x.value > today ? today : x.value; f.days = 0;
+    if (f.from > f.to) [f.from, f.to] = x.dataset.d === 'from' ? [f.from, f.from] : [f.to, f.to]; // keep from ≤ to
+    reload();
+  });
   el.querySelectorAll('select[data-f]').forEach(x => x.onchange = () => { f[x.dataset.f] = x.value; renderHo(); });
   const qi = el.querySelector('input[data-f=q]');
   qi.oninput = () => { f.q = qi.value; renderHo(); };
@@ -1808,7 +1852,7 @@ function renderHoReport(el){
     const lines = [head].concat(rows.map(p => [p.tracking, p.carrier, p.shop, hoTime(p.at), p.by, p.driver, label[hoRepStatus(p)] || '', p.jstText, p.orderId, p.issue ? 'ใช่' : '', p.follow]));
     const text = '\ufeff' + lines.map(r => r.map(v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`).join(',')).join('\r\n');
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
-    a.download = `ส่งมอบขนส่ง ${new Date().toISOString().slice(0, 10)}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    a.download = `ส่งมอบขนส่ง ${f.from === f.to ? f.from : f.from + ' ถึง ' + f.to}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   };
 }
 function hoBind(el){
@@ -1898,7 +1942,7 @@ let popT;
 function hoPop(kind, title, sub){
   const el = $('#hoPop'); if (!el) return;
   el.className = 'ho-pop ' + kind;
-  el.querySelector('.ho-pop-i').textContent = { ok: '✓', warn: '!', dup: '⟳', bad: '✕' }[kind] || '';
+  el.querySelector('.ho-pop-i').textContent = { ok: '✓', warn: '!', dup: '⟳', bad: '✕', wait: '…' }[kind] || '';
   el.querySelector('.ho-pop-t').textContent = title;
   el.querySelector('.ho-pop-s').textContent = sub || '';
   el.hidden = false; clearTimeout(popT); popT = setTimeout(() => { el.hidden = true; }, 2000);
@@ -1930,7 +1974,8 @@ function hoAdd(raw, fromCam){
   // send = what was scanned (the server records it); tracking shows the real parcel number right away when the list knows it
   HO.items.unshift({ id: 'tmp-' + t, send: t, tracking: hit ? hit.tracking : t, scanCode: hit && hit.tracking !== t ? t : '', at: Date.now(), by: myName(),
     state: 'sending', fast: !!hit, carrier: hit ? hit.carrier : '' });
-  if (!hit) hoSay('', `${t} · กำลังเช็กกับ JST…`);
+  // not in the list → JST is asked now; nothing counts until it answers (cancelled / already collected / returned boxes are refused)
+  if (!hit) { hoPop('wait', 'กำลังเช็กกับ JST…', t); hoSay('', `${t} · กำลังเช็กกับ JST…`); }
   renderHoScan(); hoPump();
   return true;
 }
@@ -1970,6 +2015,11 @@ async function hoPump(){
         // only numbers found in JST (tracking or order number) are taken: refused scans leave the list, nothing is saved
         const drop = () => { HO.items = HO.items.filter(x => x !== p); };
         if (/^HO_NOT_FOUND/.test(m)) { drop(); HO.rejected.set(p.tracking, Date.now()); hoFeedback('bad', 'ไม่พบเลข tracking / เลข order', p.tracking + ' · ไม่ได้บันทึก', 'ไม่พบเลขพัสดุ'); }
+        else if (/^HO_BLOCKED/.test(m)) {
+          const [tr, why] = m.replace(/^HO_BLOCKED:\s*/, '').split('|');
+          drop(); HO.rejected.set(p.send || p.tracking, Date.now());
+          hoFeedback('bad', 'ห้ามส่งมอบ — แยกกล่องนี้ออก', (why || '') + ' · ' + tr + ' · ไม่ได้บันทึก', 'ห้ามส่ง แยกกล่องนี้ออก');
+        }
         else if (/^HO_JST_DOWN/.test(m)) { drop(); hoFeedback('warn', 'เช็ก JST ไม่ได้ — สแกนใหม่อีกครั้ง', p.tracking + ' · ไม่ได้บันทึก', 'สแกนใหม่'); }
         else if (/สแกนไปแล้ว/.test(m)) { drop(); hoFeedback('dup', 'สแกนซ้ำ', m.replace(/^\S+\s*/, ''), 'สแกนซ้ำ'); }
         else { p.state = 'error'; p.err = errMsg(e); hoFeedback('bad', 'ไม่ได้บันทึก', p.err, 'ไม่ได้บันทึก'); }
@@ -2245,6 +2295,7 @@ async function startApp(init){
   document.body.classList.remove('locked');
   renderMe(); renderWho();
   document.body.classList.toggle('ho-only', hoOnly());
+  if (hoOnly()) document.body.classList.add('v-ho');
   if (hoOnly()) setView('ho');
   // newer servers send the round's counts with init; older ones need the extra call
   if (init.rounds && !applyCounts(init)) render(); else await refresh(true);
