@@ -826,19 +826,29 @@ if (window.visualViewport) visualViewport.addEventListener('resize', () => setTi
 // otherwise zxing-wasm. Live camera needs the page opened as a normal website (e.g. GitHub Pages);
 // inside the Apps Script link Google blocks the camera, so only "ถ่ายรูปแทน" works there.
 const ZX_FORMATS = ['EAN-13', 'EAN-8', 'UPC-A', 'UPC-E', 'Code128', 'Code39', 'Code93', 'ITF', 'Codabar', 'DataBar', 'QRCode', 'DataMatrix'];
-let detector;
-async function getDetector(){
-  if (detector !== undefined) return detector;
-  detector = null;
-  try { if ('BarcodeDetector' in window) { const f = await BarcodeDetector.getSupportedFormats(); if (f.length) detector = new BarcodeDetector({ formats: f }); } } catch {}
-  return detector;
+// parcel labels (handover) use Code 128 and QR codes only — Codabar / ITF / DataBar / EAN "find" numbers in floors, baskets and plants
+const ZX_LABEL = ['Code128', 'QRCode', 'DataMatrix'], BD_LABEL = ['code_128', 'qr_code', 'data_matrix'];
+const detectors = {};
+async function getDetector(label){
+  const k = label ? 'label' : 'all';
+  if (detectors[k] !== undefined) return detectors[k];
+  detectors[k] = null;
+  try {
+    if ('BarcodeDetector' in window) {
+      let f = await BarcodeDetector.getSupportedFormats();
+      if (label) f = f.filter(x => BD_LABEL.includes(x));
+      if (f.length) detectors[k] = new BarcodeDetector({ formats: f });
+    }
+  } catch {}
+  return detectors[k];
 }
 async function decodeCanvas(cv, ctx){
-  const d = await getDetector();
+  const label = scanFor === 'ho';
+  const d = await getDetector(label);
   if (d) { try { const r = await d.detect(cv); if (r.length && r[0].rawValue) return r[0].rawValue; } catch {} }
   if (window.ZXingWASM) {
     try {
-      const r = await ZXingWASM.readBarcodes(ctx.getImageData(0, 0, cv.width, cv.height), { formats: ZX_FORMATS, tryHarder: true, maxNumberOfSymbols: 1 });
+      const r = await ZXingWASM.readBarcodes(ctx.getImageData(0, 0, cv.width, cv.height), { formats: label ? ZX_LABEL : ZX_FORMATS, tryHarder: true, maxNumberOfSymbols: 1 });
       const ok = r.find(x => x.isValid && x.text); if (ok) return ok.text;
     } catch {}
   }
@@ -956,14 +966,19 @@ async function scanLoop(){
       ctx.drawImage(v, (w - sw) / 2, (hh - sh) / 2, sw, sh, 0, 0, cv.width, cv.height);
       const code = await decodeCanvas(cv, ctx);
       // handover: keep the camera open and take parcel after parcel (the same label held in view is read only once)
-      if (code && scanning && scanFor === 'ho') {
-        if (code !== lastHoCode || Date.now() - lastHoAt > 3000) {
-          lastHoCode = code;
-          if (hoAdd(code)) { $('#scanBox').classList.add('hit'); setTimeout(() => $('#scanBox').classList.remove('hit'), 250); }
-          scanStatus((HO.msg && HO.msg.text) || '');
-        }
-        lastHoAt = Date.now();
-        await new Promise(r => setTimeout(r, 120));
+      if (scanFor === 'ho') {
+        // the same code must come back on the next frame (≤ 0.8 s) before it counts — a misread almost never repeats
+        const sure = code && code === hoCand && Date.now() - hoCandAt < 800;
+        if (code) { hoCand = code; hoCandAt = Date.now(); }
+        if (sure && scanning) {
+          if (code !== lastHoCode || Date.now() - lastHoAt > 3000) {
+            lastHoCode = code;
+            if (hoAdd(code, true)) { $('#scanBox').classList.add('hit'); setTimeout(() => $('#scanBox').classList.remove('hit'), 250); }
+            scanStatus((HO.msg && HO.msg.text) || '');
+          }
+          lastHoAt = Date.now();
+          await new Promise(r => setTimeout(r, 120));
+        } else await new Promise(r => setTimeout(r, 30));
         continue;
       }
       if (code && scanning) {
@@ -978,11 +993,11 @@ async function scanLoop(){
 function stopStream(){ if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; track = null; } }
 function closeScanner(){ scanning = false; stopStream(); $('#scanVideo').srcObject = null; $('#scanner').hidden = true; }
 let scanFor = 'count'; // which screen opened the scanner
-let lastHoCode = '', lastHoAt = 0;
+let lastHoCode = '', lastHoAt = 0, hoCand = '', hoCandAt = 0;
 function gotCode(code){
   try { navigator.vibrate && navigator.vibrate(80); } catch {}
   if (scanFor === 'jst') { $('#jstQ').value = norm(code); jstSearchNow(); return; }
-  if (scanFor === 'ho') { hoAdd(code); return; }
+  if (scanFor === 'ho') { hoAdd(code); return; } // photo fallback: the person is waiting for an answer, so always give feedback
   $('#code').value = norm(code); resolveEnter();
   if (!S.sel) { $('#scanMsg').className = 'hint ok'; $('#scanMsg').textContent = 'อ่านได้: ' + norm(code); }
 }
@@ -1652,7 +1667,7 @@ $('#meBtn').addEventListener('click', openUserMenu);
 // สแกนทุกกล่องตอนยกให้ขนส่ง → คนรถเซ็น + ถ่ายรูป = ใบส่งมอบ; ระบบเช็กกับ JST ทุก 15 นาทีว่าขนส่งสแกนรับแล้วหรือยัง
 // การสแกนส่งเข้าคิวทีละรายการ (ไม่ต้องรอเซิร์ฟเวอร์ตอบก่อนสแกนกล่องถัดไป)
 const HO = { list: null, loading: false, err: '', cur: null, items: [], pumping: false, listAt: 0, msg: null,
-  tab: 'home', rep: null, repLoading: false, f: { days: 7, carrier: '', shop: '', status: '', q: '' } };
+  tab: 'home', rep: null, repLoading: false, rejected: new Map(), idx: new Map(), idxAt: 0, idxLoading: false, f: { days: 7, carrier: '', shop: '', status: '', q: '' } };
 const hoTime = ms => ms ? fmtTime(ms) : '-';
 const hoHours = ms => Math.max(0, Math.floor((Date.now() - ms) / 3600e3));
 function hoJstPill(p, alertHours){
@@ -1673,7 +1688,7 @@ async function hoLoad(force){
   finally { HO.loading = false; renderHo(); }
 }
 // called by the 8-second poll while the tab is open
-function hoPoll(){ if (HO.cur) hoReloadCur(); else if (HO.tab !== 'report') hoLoad(false); }
+function hoPoll(){ if (HO.cur) { hoReloadCur(); hoIdxLoad(false); } else if (HO.tab !== 'report') hoLoad(false); }
 
 function renderHo(){
   $('#hoDash').hidden = !!HO.cur; $('#hoScanView').hidden = !HO.cur;
@@ -1810,12 +1825,31 @@ function hoBind(el){
     else if (a === 'reload') hoLoad(true);
   });
 }
+// parcels waiting for pickup in JST (server rebuilds the list every 15 min): a scanned number found here gets its result at once
+async function hoIdxLoad(force){
+  if (HO.idxLoading || (!force && Date.now() - HO.idxAt < 10 * 60e3)) return;
+  HO.idxLoading = true;
+  try {
+    const r = await run('hoIndex', S.pin), m = new Map();
+    (r.data || '').split('\n').forEach(line => {
+      const [tracking, orderId, online, carrier] = line.split('\t');
+      if (!tracking) return;
+      const v = { tracking, orderId, carrier };
+      m.set(tracking, v);
+      if (online && !m.has(online)) m.set(online, v);
+      if (orderId && !m.has(orderId)) m.set(orderId, v);
+    });
+    HO.idx = m; HO.idxAt = Date.now();
+  } catch {} // older server / no list yet: every scan asks JST as before
+  finally { HO.idxLoading = false; }
+}
 // one tap: open today's scanning round and the camera — every scan = this parcel went out to a courier
 async function hoQuickStart(btn){
   ensureAudio();
   btn.disabled = true; btn.textContent = 'กำลังเริ่ม…';
   try {
     // the server hands back today's shared round (everyone scans into it), so earlier scans show up too
+    hoIdxLoad(true);
     HO.cur = await run('hoStart', S.pin, ''); HO.items = []; HO.msg = null; HO.listAt = 0;
     renderHo(); window.scrollTo(0, 0);
     scanFor = 'ho'; openScanner(); hoReloadCur();
@@ -1867,7 +1901,7 @@ function hoPop(kind, title, sub){
   el.querySelector('.ho-pop-i').textContent = { ok: '✓', warn: '!', dup: '⟳', bad: '✕' }[kind] || '';
   el.querySelector('.ho-pop-t').textContent = title;
   el.querySelector('.ho-pop-s').textContent = sub || '';
-  el.hidden = false; clearTimeout(popT); popT = setTimeout(() => { el.hidden = true; }, 1000);
+  el.hidden = false; clearTimeout(popT); popT = setTimeout(() => { el.hidden = true; }, 2000);
 }
 /** one call per scan result: sound + vibration + spoken words (problems only) + popup + message line */
 function hoFeedback(kind, title, sub, words){
@@ -1875,15 +1909,28 @@ function hoFeedback(kind, title, sub, words){
   if (words) say(words);
   hoSay(kind === 'ok' ? 'ok' : kind === 'warn' ? 'warn' : 'bad', title + (sub ? ' · ' + sub : ''));
 }
-function hoAdd(raw){
-  const t = norm(raw).replace(/[^A-Z0-9-]/g, '');
-  if (!/^[A-Z0-9-]{8,40}$/.test(t)) { hoFeedback('bad', 'ไม่ใช่เลขพัสดุ', String(raw).slice(0, 40), 'ไม่ใช่เลขพัสดุ'); return false; }
-  if (S.byCode.has(t)) { hoFeedback('bad', 'บาร์โค้ดสินค้า — สแกนเลขพัสดุบนใบปะหน้า', t, 'บาร์โค้ดสินค้า'); return false; }
-  if (HO.items.some(p => (p.tracking === t || p.scanCode === t) && p.state !== 'error')) { hoFeedback('dup', 'สแกนซ้ำ', t, 'สแกนซ้ำ'); return false; }
-  sfx('tick');
-  HO.items = HO.items.filter(p => p.tracking !== t);
-  HO.items.unshift({ id: 'tmp-' + t, tracking: t, at: Date.now(), by: myName(), state: 'sending' });
-  hoSay('ok', `✓ ${t} · รวม ${num(hoCount())} กล่อง`);
+/** fromCam: read by the camera (junk is ignored quietly); typed / scanner-gun input always gets feedback */
+function hoAdd(raw, fromCam){
+  let t = norm(raw).replace(/[^A-Z0-9-]/g, '');
+  // a QR code may hold a link or text: take the longest piece that looks like a parcel / order number
+  if (fromCam && /[^A-Za-z0-9-\s]/.test(String(raw))) t = (String(raw).toUpperCase().match(/[A-Z0-9-]{8,40}/g) || []).filter(x => /\d{4}/.test(x)).sort((a, b) => b.length - a.length)[0] || '';
+  if (!/^[A-Z0-9-]{8,40}$/.test(t) || !/\d{4}/.test(t)) {
+    if (!fromCam) hoFeedback('bad', 'ไม่ใช่เลขพัสดุ', String(raw).slice(0, 40), 'ไม่ใช่เลขพัสดุ');
+    return false;
+  }
+  // JST already said "not found" for this number a moment ago: don't repeat the alarm while it stays in front of the camera
+  if (fromCam && Date.now() - (HO.rejected.get(t) || 0) < 15000) return false;
+  if (S.byCode.has(t)) { if (!fromCam) hoFeedback('bad', 'บาร์โค้ดสินค้า — สแกนเลขพัสดุบนใบปะหน้า', t, 'บาร์โค้ดสินค้า'); return false; }
+  const hit = HO.idx.get(t);
+  if (HO.items.some(p => (p.tracking === t || p.scanCode === t || (hit && p.tracking === hit.tracking)) && p.state !== 'error')) { hoFeedback('dup', 'สแกนซ้ำ', t, 'สแกนซ้ำ'); return false; }
+  HO.items = HO.items.filter(p => !(p.state === 'error' && (p.tracking === t || p.send === t))); // a failed earlier try of this number
+  // in the waiting-for-pickup list → answer now; the save + JST confirmation run in the background
+  if (hit) hoFeedback('ok', 'ส่งมอบสำเร็จ', (hit.tracking !== t ? 'จับคู่จากเลข ' + t + ' → ' : '') + hit.tracking + (hit.carrier ? ' · ' + hit.carrier : ''));
+  else sfx('tick');
+  // send = what was scanned (the server records it); tracking shows the real parcel number right away when the list knows it
+  HO.items.unshift({ id: 'tmp-' + t, send: t, tracking: hit ? hit.tracking : t, scanCode: hit && hit.tracking !== t ? t : '', at: Date.now(), by: myName(),
+    state: 'sending', fast: !!hit, carrier: hit ? hit.carrier : '' });
+  if (!hit) hoSay('', `${t} · กำลังเช็กกับ JST…`);
   renderHoScan(); hoPump();
   return true;
 }
@@ -1907,10 +1954,11 @@ async function hoPump(){
       const cur = HO.cur, p = cur && HO.items.slice().reverse().find(x => x.state === 'sending'); // oldest first
       if (!p) break;
       try {
-        Object.assign(p, await run('hoScan', S.pin, cur.id, p.tracking), { state: '' });
+        Object.assign(p, await run('hoScan', S.pin, cur.id, p.send || p.tracking), { state: '' });
         p.warn = hoJstWarn(p.jstLookup, '');
         const j = p.jstLookup || {};
-        if (!p.warn) hoFeedback('ok', 'ส่งมอบสำเร็จ', (p.scanCode ? 'จับคู่จากเลข ' + p.scanCode + ' → ' : '') + p.tracking + (p.carrier ? ' · ' + p.carrier : ''));
+        if (!p.warn && p.fast) { /* already answered from the waiting-for-pickup list */ }
+        else if (!p.warn) hoFeedback('ok', 'ส่งมอบสำเร็จ', (p.scanCode ? 'จับคู่จากเลข ' + p.scanCode + ' → ' : '') + p.tracking + (p.carrier ? ' · ' + p.carrier : ''));
         else if (p.warn.bad) hoFeedback('bad', 'ออเดอร์ถูกยกเลิกใน JST — อย่าส่ง', p.tracking, 'ออเดอร์ยกเลิก อย่าส่ง');
         else if (j.error) hoFeedback('warn', 'บันทึกแล้ว · ยังเช็ก JST ไม่ได้', p.tracking);
         else hoFeedback('warn', 'ไม่พบออเดอร์ใน JST — แยกไว้', p.tracking, 'ไม่พบออเดอร์ แยกไว้');
@@ -1921,7 +1969,7 @@ async function hoPump(){
         const m = e.message || '';
         // only numbers found in JST (tracking or order number) are taken: refused scans leave the list, nothing is saved
         const drop = () => { HO.items = HO.items.filter(x => x !== p); };
-        if (/^HO_NOT_FOUND/.test(m)) { drop(); hoFeedback('bad', 'ไม่พบเลข tracking / เลข order', p.tracking + ' · ไม่ได้บันทึก', 'ไม่พบเลขพัสดุ'); }
+        if (/^HO_NOT_FOUND/.test(m)) { drop(); HO.rejected.set(p.tracking, Date.now()); hoFeedback('bad', 'ไม่พบเลข tracking / เลข order', p.tracking + ' · ไม่ได้บันทึก', 'ไม่พบเลขพัสดุ'); }
         else if (/^HO_JST_DOWN/.test(m)) { drop(); hoFeedback('warn', 'เช็ก JST ไม่ได้ — สแกนใหม่อีกครั้ง', p.tracking + ' · ไม่ได้บันทึก', 'สแกนใหม่'); }
         else if (/สแกนไปแล้ว/.test(m)) { drop(); hoFeedback('dup', 'สแกนซ้ำ', m.replace(/^\S+\s*/, ''), 'สแกนซ้ำ'); }
         else { p.state = 'error'; p.err = errMsg(e); hoFeedback('bad', 'ไม่ได้บันทึก', p.err, 'ไม่ได้บันทึก'); }
