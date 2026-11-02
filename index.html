@@ -132,7 +132,7 @@ tr.void td{text-decoration:line-through;color:var(--muted)}
 .notice{padding:10px 12px;border-radius:8px;background:var(--warn-soft);color:var(--ink);font-size:14px;margin-bottom:12px;display:flex;flex-direction:column;gap:8px}
 .sync{font-size:12px;color:var(--muted);text-align:right;margin:-6px 0 8px}
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:10;background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom,0px)}
-nav.tabs .in{display:grid;grid-template-columns:repeat(5,1fr);width:100%;max-width:640px}
+nav.tabs .in{display:grid;grid-template-columns:repeat(6,1fr);width:100%;max-width:640px}
 @media (max-width:420px){nav.tabs button{font-size:11px;padding-inline:2px}}
 nav.tabs button{font:inherit;font-size:13px;font-weight:600;border:0;background:transparent;color:var(--muted);padding:9px 4px 11px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer}
 nav.tabs button svg{width:22px;height:22px}
@@ -227,6 +227,34 @@ button.ghost:disabled{opacity:.5}
 .scanbar{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
 .scanbar .btn{font:inherit;font-weight:700;font-size:16px;padding:12px 18px;border-radius:10px;border:0;background:#fff;color:#000;cursor:pointer}
 .scanbar .btn.alt{background:transparent;color:#fff;border:1.5px solid #fff}
+/* ส่งมอบพัสดุให้ขนส่ง */
+.ho-issues{border-left:4px solid var(--bad);background:var(--bad-soft);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px}
+.ho-issues .list{margin-top:4px}
+.ho-check{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:14px}
+.ho-check .bad{color:var(--bad)}
+button.item.ho-row{all:unset;box-sizing:border-box;display:flex;gap:10px;align-items:center;width:100%;padding:11px 14px;border-top:1px solid var(--line);cursor:pointer}
+button.item.ho-row:first-child{border-top:0}
+button.item.ho-row:focus-visible{outline:3px solid var(--accent);outline-offset:-3px}
+.ho-head{display:flex;align-items:center;gap:12px;justify-content:space-between}
+.ho-n{display:flex;align-items:baseline;gap:4px;color:var(--accent)}
+.ho-n .mono{font-size:40px;font-weight:600;line-height:1}
+.ho-n small{font-size:14px;font-weight:600}
+.item.ho-err{background:var(--bad-soft)}
+.ho-carriers .chip{font-size:15px;padding:8px 14px}
+.chip.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.ho-big{text-align:center;font-size:20px;font-weight:600}
+.ho-big .mono{font-size:44px;color:var(--accent)}
+label.ghost.ho-photo{display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 12px;font-size:15px;text-align:center;white-space:normal;border:1.5px dashed var(--accent);color:var(--accent);border-radius:var(--r)}
+.ho-photo img{max-width:100%;max-height:220px;border-radius:8px}
+canvas.ho-sign{width:100%;height:170px;border:1.5px dashed var(--line);border-radius:var(--r);background:#fff;touch-action:none;display:block}
+.ho-info{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:14px}
+.ho-info span{display:block;font-size:12px}
+.ho-info b{overflow-wrap:anywhere}
+.ho-proof{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ho-proof figure{margin:0;display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);min-width:0}
+.ho-proof img{width:100%;max-height:260px;object-fit:contain;border-radius:8px;border:1px solid var(--line);background:#fff}
+.ho-kpis{grid-template-columns:repeat(3,1fr)}
+@media (max-width:420px){.ho-kpis{grid-template-columns:repeat(3,1fr)}.ho-kpis .kpi .v{font-size:18px}}
 </style>
 </head>
 <body>
@@ -354,6 +382,30 @@ button.ghost:disabled{opacity:.5}
     <div id="jstList"></div>
   </section>
 
+  <!-- HANDOVER TO COURIER -->
+  <section id="v-ho" hidden>
+    <div id="hoDash"></div>
+    <div id="hoScanView" hidden>
+      <div class="row" style="margin-bottom:10px"><button type="button" class="ghost" id="hoBackBtn">← กลับ</button></div>
+      <div class="card">
+        <div class="ho-head" id="hoHead"></div>
+        <form id="hoForm" autocomplete="off" novalidate>
+          <div class="row">
+            <input id="hoCode" type="search" class="big mono" placeholder="สแกน / พิมพ์เลขพัสดุ" enterkeyhint="done" autocomplete="off" autocapitalize="characters">
+            <button type="button" class="iconbtn" id="hoCam" title="สแกนต่อเนื่องด้วยกล้อง" aria-label="สแกนต่อเนื่องด้วยกล้อง" style="border:0">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10 8v8M13 8v8M16 8v8"/></svg>
+            </button>
+          </div>
+        </form>
+        <p id="hoMsg" class="hint">สแกนบาร์โค้ดเลขพัสดุบนใบปะหน้าทุกกล่องที่ยกให้ขนส่ง · กล้องสแกนต่อเนื่องได้ไม่ต้องกดใหม่</p>
+        <button type="button" class="primary" id="hoClose" disabled>ส่งมอบ · ให้คนรถเซ็นรับ</button>
+        <button type="button" class="ghost danger" id="hoCancel" hidden>ยกเลิกรอบนี้</button>
+      </div>
+      <h2>พัสดุในรอบนี้ (ล่าสุดอยู่บน)</h2>
+      <div id="hoList"></div>
+    </div>
+  </section>
+
   <!-- EXPIRY ALERT -->
   <section id="v-exp" hidden>
     <p class="hint" id="expHead"></p>
@@ -401,6 +453,7 @@ button.ghost:disabled{opacity:.5}
 
 <nav class="tabs" aria-label="เมนู"><div class="in">
   <button type="button" data-v="count" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6v12M8 6v12M12 6v12M16 6v12M20 6v12"/></svg>นับ</button>
+  <button type="button" data-v="ho"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 6h13v10H1zM14 10h4l4 3v3h-8"/><circle cx="5.5" cy="18" r="2"/><circle cx="17.5" cy="18" r="2"/></svg>ส่งมอบ</button>
   <button type="button" data-v="sum"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 5h16M4 10h16M4 15h10M4 20h7"/></svg>สรุปยอด</button>
   <button type="button" data-v="jst"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M7 21v-8h10v8M7 17h10"/></svg>สต๊อก JST</button>
   <button type="button" data-v="exp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg>หมดอายุ</button>
@@ -522,7 +575,7 @@ function toast(msg){ const t = $('#toast'); t.textContent = msg; t.hidden = fals
 // ---------- views ----------
 function setView(v){
   S.view = v;
-  for (const id of ['count','sum','jst','exp','rounds']) $('#v-' + id).hidden = id !== v;
+  for (const id of ['count','ho','sum','jst','exp','rounds']) $('#v-' + id).hidden = id !== v;
   document.querySelectorAll('nav.tabs button').forEach(b => { if (b.dataset.v === v) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
   render();
   window.scrollTo(0, 0);
@@ -536,6 +589,7 @@ function render(){
   else if (S.view === 'sum') renderSummary();
   else if (S.view === 'jst') renderJst();
   else if (S.view === 'exp') loadExpiry();
+  else if (S.view === 'ho') renderHo();
   else renderRounds();
 }
 
@@ -789,7 +843,8 @@ async function openScanner(){
   setupCameraControls();
   const v = $('#scanVideo'); v.srcObject = stream; $('#scanBox').hidden = false;
   try { await v.play(); } catch {}
-  scanStatus('เล็งเส้นแดงพาดผ่านบาร์โค้ด ถือห่าง 15–25 ซม. ถ้าภาพไม่ชัดกด "ซูม" แล้วถอยออก');
+  scanStatus(scanFor === 'ho' ? 'เล็งบาร์โค้ดเลขพัสดุทีละกล่อง ได้ยินเสียงติ๊ดแล้วเปลี่ยนกล่องได้เลย · เสร็จแล้วกด "ปิด"'
+    : 'เล็งเส้นแดงพาดผ่านบาร์โค้ด ถือห่าง 15–25 ซม. ถ้าภาพไม่ชัดกด "ซูม" แล้วถอยออก');
   scanning = true; scanLoop();
 }
 function setupCameraControls(){
@@ -828,6 +883,17 @@ async function scanLoop(){
       cv.width = Math.round(sw * k); cv.height = Math.round(sh * k);
       ctx.drawImage(v, (w - sw) / 2, (hh - sh) / 2, sw, sh, 0, 0, cv.width, cv.height);
       const code = await decodeCanvas(cv, ctx);
+      // handover: keep the camera open and take parcel after parcel (the same label held in view is read only once)
+      if (code && scanning && scanFor === 'ho') {
+        if (code !== lastHoCode || Date.now() - lastHoAt > 3000) {
+          lastHoCode = code;
+          if (hoAdd(code)) { beep(); $('#scanBox').classList.add('hit'); setTimeout(() => $('#scanBox').classList.remove('hit'), 250); }
+          scanStatus((HO.msg && HO.msg.text) || '');
+        }
+        lastHoAt = Date.now();
+        await new Promise(r => setTimeout(r, 120));
+        continue;
+      }
       if (code && scanning) {
         scanning = false; beep(); $('#scanBox').classList.add('hit');
         setTimeout(() => { closeScanner(); gotCode(code); }, 150);
@@ -840,9 +906,11 @@ async function scanLoop(){
 function stopStream(){ if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; track = null; } }
 function closeScanner(){ scanning = false; stopStream(); $('#scanVideo').srcObject = null; $('#scanner').hidden = true; }
 let scanFor = 'count'; // which screen opened the scanner
+let lastHoCode = '', lastHoAt = 0;
 function gotCode(code){
   try { navigator.vibrate && navigator.vibrate(80); } catch {}
   if (scanFor === 'jst') { $('#jstQ').value = norm(code); jstSearchNow(); return; }
+  if (scanFor === 'ho') { hoAdd(code); return; }
   $('#code').value = norm(code); resolveEnter();
   if (!S.sel) { $('#scanMsg').className = 'hint ok'; $('#scanMsg').textContent = 'อ่านได้: ' + norm(code); }
 }
@@ -859,6 +927,7 @@ $('#cam').addEventListener('change', async e => {
   const msg = $('#scanMsg'); msg.className = 'hint'; msg.textContent = 'กำลังอ่านบาร์โค้ด…';
   const code = await decodeImage(f);
   if (code) { msg.textContent = ''; gotCode(code); }
+  else if (scanFor === 'ho') { msg.textContent = ''; hoSay('bad', 'อ่านบาร์โค้ดจากรูปไม่ได้ ถ่ายใหม่ให้ชัด หรือพิมพ์เลขพัสดุแทน'); }
   else { msg.className = 'hint bad'; msg.textContent = 'อ่านไม่ได้ ถ่ายใหม่ให้บาร์โค้ดอยู่กลางภาพ ชัด ไม่สะท้อนแสง หรือพิมพ์ชื่อ/SKU ค้นหาแทน'; }
 });
 async function decodeImage(file){
@@ -1502,6 +1571,332 @@ function openUserForm(u){
 }
 $('#meBtn').addEventListener('click', openUserMenu);
 
+// ---------- ส่งมอบพัสดุให้ขนส่ง ----------
+// สแกนทุกกล่องตอนยกให้ขนส่ง → คนรถเซ็น + ถ่ายรูป = ใบส่งมอบ; ระบบเช็กกับ JST ทุกชั่วโมงว่าขนส่งสแกนรับแล้วหรือยัง
+// การสแกนส่งเข้าคิวทีละรายการ (ไม่ต้องรอเซิร์ฟเวอร์ตอบก่อนสแกนกล่องถัดไป)
+const HO = { list: null, loading: false, err: '', cur: null, items: [], pumping: false, listAt: 0, msg: null };
+const hoTime = ms => ms ? fmtTime(ms) : '-';
+const hoHours = ms => Math.max(0, Math.floor((Date.now() - ms) / 3600e3));
+function hoJstPill(p, alertHours){
+  if (p.jst === 'collected') return `<span class="pill ok">ขนส่งรับแล้ว</span>`;
+  const late = p.flaggedAt && !p.done;
+  if (p.jst === 'waiting') return `<span class="pill ${late ? 'bad' : 'warn'}">JST: ยังไม่ขึ้นว่าขนส่งรับ</span>`;
+  if (p.jst === 'missing') return `<span class="pill ${late ? 'bad' : 'warn'}">ไม่พบเลขนี้ใน JST</span>`;
+  return `<span class="pill none">ยังไม่ได้เช็ก JST</span>`;
+}
+async function hoLoad(force){
+  if (HO.loading || (!force && Date.now() - HO.listAt < 20e3)) return;
+  HO.loading = true;
+  try { HO.list = await run('hoList', S.pin); HO.err = ''; HO.listAt = Date.now(); }
+  catch (e) {
+    if (e.message === 'AUTH_REQUIRED') { authLost(); return; }
+    HO.err = /unknown function/.test(e.message) ? 'เซิร์ฟเวอร์ยังไม่รองรับการส่งมอบ — ผู้ดูแลต้องอัปเดต Code.gs ใน Apps Script ก่อน' : errMsg(e);
+  }
+  finally { HO.loading = false; renderHo(); }
+}
+// called by the 8-second poll while the tab is open
+function hoPoll(){ if (HO.cur) hoReloadCur(); else hoLoad(false); }
+
+function renderHo(){
+  $('#hoDash').hidden = !!HO.cur; $('#hoScanView').hidden = !HO.cur;
+  if (HO.cur) return renderHoScan();
+  const L = HO.list, el = $('#hoDash');
+  if (!L) { el.innerHTML = HO.err ? `<div class="warnbox bad">${esc(HO.err)}</div><p><button class="ghost" data-act="reload">ลองใหม่</button></p>` : '<div class="empty">กำลังโหลด…</div>'; hoBind(el); if (!HO.err) hoLoad(true); return; }
+  const open = L.handovers.filter(h => h.status === 'open'), done = L.handovers.filter(h => h.status !== 'open');
+  const today = new Date().toDateString();
+  const todayN = done.filter(h => h.status === 'closed' && new Date(h.closedAt).toDateString() === today).reduce((a, h) => a + h.n, 0);
+  const waiting = done.filter(h => h.status === 'closed').reduce((a, h) => a + h.n - h.collected, 0);
+  const ck = L.check;
+  let html = `<div class="kpis ho-kpis">
+      <div class="kpi"><div class="v">${num(todayN)}</div><div class="l">ส่งมอบวันนี้ (กล่อง)</div></div>
+      <div class="kpi"><div class="v">${num(waiting)}</div><div class="l">รอ JST ยืนยันว่าขนส่งรับ</div></div>
+      <div class="kpi${L.issues.length ? ' alert' : ''}"><div class="v">${num(L.issues.length)}</div><div class="l">⚠ ต้องติดตาม</div></div></div>`;
+  if (L.issues.length) {
+    html += `<div class="ho-issues"><b>⚠ ส่งมอบแล้วเกิน ${L.alertHours} ชม. แต่ JST ยังไม่ขึ้นว่าขนส่งรับ</b>
+      <p class="hint">ติดต่อขนส่งพร้อมใบส่งมอบ (ลายเซ็นคนรถ + รูป) ก่อนส่งของซ้ำ แล้วบันทึกการติดตามไว้</p><div class="list">` +
+      L.issues.map(p => `<div class="item"><div class="main">
+        <div class="t1"><b class="mono">${esc(p.tracking)}</b>${hoJstPill(p)}</div>
+        <div class="t2">${esc(p.h.carrier || p.carrier)} · ส่งมอบ ${hoTime(p.h.closedAt)} (${hoHours(p.h.closedAt)} ชม.) · คนรถ ${esc(p.h.driver || '-')}${p.h.plate ? ' ' + esc(p.h.plate) : ''}${p.orderId ? ' · ออเดอร์ ' + esc(p.orderId) : ''}</div>
+        ${p.follow ? `<div class="t2">📝 ${esc(p.follow)} — ${esc(p.followBy)} ${hoTime(p.followAt)}</div>` : ''}
+        <div class="row" style="margin-top:6px;flex-wrap:wrap"><button class="ghost" data-act="detail" data-id="${esc(p.ho)}">ใบส่งมอบ</button><button class="ghost" data-act="follow" data-id="${esc(p.id)}">บันทึกการติดตาม</button></div>
+      </div></div>`).join('') + `</div></div>`;
+  }
+  html += `<button class="primary" type="button" data-act="start" style="width:100%;margin-top:12px">+ เริ่มส่งมอบพัสดุให้ขนส่ง</button>`;
+  if (open.length) html += `<h2>กำลังสแกน (ยังไม่ได้ส่งมอบ)</h2><div class="list">` + open.map(h => `<div class="item"><div class="main">
+      <div class="t1"><b>${esc(h.carrier)}</b><span class="pill warn">ยังไม่เซ็นรับ</span></div>
+      <div class="t2">${num(h.n)} กล่อง · เริ่ม ${hoTime(h.startedAt)} โดย ${esc(h.startedBy)}</div></div>
+      <button class="ghost solid" data-act="open" data-id="${esc(h.id)}">สแกนต่อ</button></div>`).join('') + `</div>`;
+  html += `<div class="ho-check">${ck ? (ck.ok ? `เช็กกับ JST ล่าสุด ${hoTime(ck.at)} · รอยืนยัน ${num(ck.pending)} กล่อง${ck.complete === false ? ' (ยังเช็กไม่ครบ จะเช็กต่อรอบหน้า)' : ''}`
+      : `<span class="bad">เช็กกับ JST ไม่สำเร็จ ${hoTime(ck.at)}: ${esc(ck.error)}</span>`) : 'ยังไม่เคยเช็กกับ JST (ระบบเช็กเองทุกชั่วโมงหลังส่งมอบรอบแรก)'}
+      <button class="ghost" data-act="check">เช็กตอนนี้</button></div>`;
+  html += `<h2>ส่งมอบแล้ว (30 วันล่าสุด)</h2>` + (done.length ? `<div class="list">` + done.map(h => `<button class="item ho-row" data-act="detail" data-id="${esc(h.id)}"><div class="main">
+      <div class="t1"><b>${esc(h.carrier)}</b>${h.status === 'cancelled' ? '<span class="pill none">ยกเลิก</span>'
+        : (h.flagged ? `<span class="pill bad">⚠ ${num(h.flagged)}</span>` : '') + `<span class="pill ${h.collected >= h.n ? 'ok' : 'none'}">ขนส่งรับแล้ว ${num(h.collected)}/${num(h.n)}</span>`}</div>
+      <div class="t2">${h.status === 'cancelled' ? `ยกเลิกโดย ${esc(h.closedBy)} ${hoTime(h.closedAt)}`
+        : `${hoTime(h.closedAt)} · คนรถ ${esc(h.driver || '-')}${h.plate ? ' ' + esc(h.plate) : ''} · ส่งมอบโดย ${esc(h.closedBy)}`}</div></div>
+      <span class="qty">${num(h.n)}</span></button>`).join('') + `</div>` : `<div class="empty">ยังไม่มีการส่งมอบ</div>`);
+  if (HO.err) html += `<p class="hint bad">${esc(HO.err)}</p>`;
+  el.innerHTML = html;
+  hoBind(el);
+}
+function hoBind(el){
+  el.querySelectorAll('[data-act]').forEach(b => b.onclick = () => {
+    const id = b.dataset.id, a = b.dataset.act;
+    if (a === 'start') hoStartDlg();
+    else if (a === 'open') hoOpen(id);
+    else if (a === 'detail') hoDetail(id);
+    else if (a === 'follow') hoFollowDlg(HO.list.issues.find(p => p.id === id));
+    else if (a === 'check') hoCheck(b);
+    else if (a === 'reload') hoLoad(true);
+  });
+}
+function hoStartDlg(){
+  const carriers = (HO.list && HO.list.carriers) || [], last = lsGet('tmws.hoCarrier') || '';
+  const md = openModal(`<div class="modal-head">ขนส่งเจ้าไหนมารับ?</div><div class="modal-body">
+    <div class="chips ho-carriers">${carriers.map(c => `<button type="button" class="chip${c === last ? ' on' : ''}" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div>
+    <div class="field"><label>หรือพิมพ์ชื่อขนส่ง</label><input type="text" id="hoCarrierIn" value="${esc(last)}"></div></div>
+    <div class="modal-foot"><span style="flex:1"></span><button class="ghost" data-x>ยกเลิก</button><button class="ghost solid" data-ok>เริ่มสแกน</button></div>`);
+  const inp = md.el.querySelector('#hoCarrierIn');
+  md.el.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { inp.value = b.dataset.c; md.el.querySelectorAll('[data-c]').forEach(x => x.classList.toggle('on', x === b)); });
+  md.el.querySelector('[data-x]').onclick = md.close;
+  md.el.querySelector('[data-ok]').onclick = async () => {
+    const c = inp.value.trim();
+    if (!c) { inp.focus(); return; }
+    const ok = md.el.querySelector('[data-ok]'); ok.disabled = true; ok.textContent = 'กำลังเริ่ม…';
+    try { const h = await run('hoStart', S.pin, c); lsSet('tmws.hoCarrier', c); md.close(); HO.cur = h; HO.items = []; HO.msg = null; HO.listAt = 0; renderHo(); $('#hoCode').focus(); }
+    catch (e) { ok.disabled = false; ok.textContent = 'เริ่มสแกน'; toast(errMsg(e)); }
+  };
+}
+async function hoOpen(id){
+  const h = HO.list && HO.list.handovers.find(x => x.id === id);
+  HO.cur = h || { id, carrier: '', status: 'open' }; HO.items = []; HO.msg = { cls: '', text: 'กำลังโหลดรายการ…' };
+  renderHo(); window.scrollTo(0, 0);
+  await hoReloadCur();
+  HO.msg = null; renderHoScan();
+}
+async function hoReloadCur(){
+  const cur = HO.cur; if (!cur) return;
+  try {
+    const r = await run('hoGet', S.pin, cur.id);
+    if (HO.cur !== cur) return;
+    HO.cur = Object.assign(cur, r.handover);
+    // keep this phone's scans that are still being sent or were refused; the rest comes from the server (other phones' scans too)
+    const local = HO.items.filter(p => p.state === 'sending' || p.state === 'error');
+    HO.items = local.concat(r.parcels.filter(p => !p.void && !local.some(l => l.tracking === p.tracking)));
+    if (HO.cur.status !== 'open') { toast(HO.cur.status === 'closed' ? 'รอบนี้ส่งมอบแล้ว' : 'รอบนี้ถูกยกเลิกแล้ว'); hoBack(); return; }
+  } catch (e) { if (e.message === 'AUTH_REQUIRED') authLost(); }
+  renderHoScan();
+}
+function hoBack(){ HO.cur = null; HO.items = []; HO.listAt = 0; renderHo(); hoLoad(true); window.scrollTo(0, 0); }
+const hoCount = () => HO.items.filter(p => p.state !== 'error').length;
+function hoSay(cls, text){ HO.msg = { cls, text }; const m = $('#hoMsg'); if (m) { m.className = 'hint ' + cls; m.textContent = text; } }
+/** returns true when the code was taken (new parcel) */
+function hoAdd(raw){
+  const t = norm(raw).replace(/[^A-Z0-9-]/g, '');
+  try { navigator.vibrate && navigator.vibrate(60); } catch {}
+  if (!/^[A-Z0-9-]{8,40}$/.test(t)) { hoSay('bad', `"${raw}" ไม่ใช่เลขพัสดุ — สแกนบาร์โค้ดเลขพัสดุบนใบปะหน้า`); return false; }
+  if (S.byCode.has(t)) { hoSay('bad', `${t} เป็นบาร์โค้ดสินค้า ไม่ใช่เลขพัสดุ — สแกนบาร์โค้ดบนใบปะหน้า`); return false; }
+  if (HO.items.some(p => p.tracking === t && p.state !== 'error')) { hoSay('warn', `${t} สแกนไปแล้วในรอบนี้`); return false; }
+  HO.items = HO.items.filter(p => p.tracking !== t);
+  HO.items.unshift({ id: 'tmp-' + t, tracking: t, at: Date.now(), by: myName(), state: 'sending' });
+  hoSay('ok', `✓ ${t} · รวม ${num(hoCount())} กล่อง`);
+  renderHoScan(); hoPump();
+  return true;
+}
+async function hoPump(){
+  if (HO.pumping) return; HO.pumping = true;
+  try {
+    for (;;) {
+      const cur = HO.cur, p = cur && HO.items.slice().reverse().find(x => x.state === 'sending'); // oldest first
+      if (!p) break;
+      try { Object.assign(p, await run('hoScan', S.pin, cur.id, p.tracking), { state: '' }); }
+      catch (e) {
+        if (e.message === 'AUTH_REQUIRED') { authLost(); break; }
+        if (e.message === 'เชื่อมต่อไม่ได้') { await new Promise(r => setTimeout(r, 3000)); continue; } // no signal: keep it queued and retry
+        p.state = 'error'; p.err = errMsg(e); hoSay('bad', p.err);
+      }
+      if (HO.cur === cur) renderHoScan();
+    }
+  } finally { HO.pumping = false; }
+}
+function renderHoScan(){
+  const h = HO.cur; if (!h) return;
+  const n = hoCount(), sending = HO.items.filter(p => p.state === 'sending').length, bad = HO.items.filter(p => p.state === 'error').length;
+  $('#hoHead').innerHTML = `<div><div class="muted" style="font-size:13px">กำลังสแกนส่งมอบให้</div><b style="font-size:18px">${esc(h.carrier || '…')}</b></div>
+    <div class="ho-n"><span class="mono">${num(n)}</span><small>กล่อง</small></div>`;
+  if (HO.msg) { const m = $('#hoMsg'); m.className = 'hint ' + HO.msg.cls; m.textContent = HO.msg.text; }
+  $('#hoList').innerHTML = HO.items.length ? `<div class="list">` + HO.items.map(p => `<div class="item${p.state === 'error' ? ' ho-err' : ''}"><div class="main">
+      <div class="t1"><b class="mono">${esc(p.tracking)}</b>${p.state === 'sending' ? '<span class="pill none">กำลังบันทึก…</span>' : p.state === 'error' ? '<span class="pill bad">ไม่ได้บันทึก</span>' : ''}</div>
+      <div class="t2">${p.state === 'error' ? esc(p.err) : `${hoTime(p.at)} · ${esc(p.by)}`}</div></div>
+      ${p.state === 'sending' ? '' : `<button class="ghost${p.state === 'error' ? '' : ' danger'}" data-del="${esc(p.id)}">${p.state === 'error' ? 'เอาออก' : 'ลบ'}</button>`}</div>`).join('') + `</div>`
+    : `<div class="empty">ยังไม่ได้สแกน — สแกนบาร์โค้ดเลขพัสดุบนใบปะหน้าทีละกล่อง</div>`;
+  $('#hoList').querySelectorAll('[data-del]').forEach(b => b.onclick = () => hoDel(HO.items.find(p => p.id === b.dataset.del), b));
+  const close = $('#hoClose');
+  close.disabled = !n || sending > 0 || bad > 0;
+  close.textContent = sending ? `กำลังบันทึก ${sending} รายการ…` : bad ? `เอารายการสีแดงออกก่อน (${bad})` : `ส่งมอบ · ให้คนรถเซ็นรับ ${num(n)} กล่อง`;
+  $('#hoCancel').hidden = n > 0;
+}
+async function hoDel(p, btn){
+  if (!p) return;
+  if (p.state === 'error') { HO.items = HO.items.filter(x => x !== p); renderHoScan(); return; }
+  if (!await confirmBox('ลบออกจากรอบนี้?', p.tracking + '\nใช้เมื่อสแกนผิดกล่อง หรือกล่องนี้ไม่ได้ให้ขนส่งรอบนี้', 'ลบ', true)) return;
+  btn.disabled = true;
+  try { await run('hoVoid', S.pin, p.id); HO.items = HO.items.filter(x => x !== p); hoSay('', `ลบ ${p.tracking} แล้ว · รวม ${num(hoCount())} กล่อง`); }
+  catch (e) { toast(errMsg(e)); }
+  renderHoScan();
+}
+$('#hoForm').addEventListener('submit', e => { e.preventDefault(); const v = $('#hoCode').value.trim(); if (!v) return; hoAdd(v); $('#hoCode').value = ''; $('#hoCode').focus(); });
+$('#hoCam').addEventListener('click', () => { scanFor = 'ho'; openScanner(); });
+$('#hoBackBtn').addEventListener('click', hoBack);
+$('#hoCancel').addEventListener('click', async () => {
+  if (!HO.cur || !await confirmBox('ยกเลิกรอบนี้?', 'รอบที่ยังไม่ได้สแกนจะถูกยกเลิก', 'ยกเลิกรอบ', true)) return;
+  try { await run('hoCancel', S.pin, HO.cur.id); toast('ยกเลิกรอบแล้ว'); hoBack(); } catch (e) { toast(errMsg(e)); }
+});
+$('#hoClose').addEventListener('click', () => hoCloseDlg());
+
+// ---- ส่งมอบ: คนรถนับ + เซ็น + ถ่ายรูป ----
+function hoCloseDlg(){
+  const h = HO.cur, n = hoCount();
+  const md = openModal(`<div class="modal-head">ส่งมอบให้ ${esc(h.carrier)}</div><div class="modal-body">
+    <div class="ho-big"><span class="mono">${num(n)}</span> กล่อง</div>
+    <p class="hint" style="text-align:center">ให้คนรถนับกล่องให้ตรงกับจำนวนนี้ก่อนเซ็น</p>
+    <div class="field"><label>ชื่อคนรถ *</label><input type="text" id="hoDriver" autocomplete="off"></div>
+    <div class="grid2"><div class="field"><label>ทะเบียนรถ</label><input type="text" id="hoPlate" autocomplete="off"></div>
+      <div class="field"><label>เบอร์โทรคนรถ</label><input type="text" id="hoPhone" inputmode="tel" autocomplete="off"></div></div>
+    <div class="field"><label>รูปถ่าย: กองพัสดุกับคนรถ/รถขนส่ง *</label>
+      <label class="ghost ho-photo" for="hoPhotoIn"><span id="hoPhotoTxt">📷 ถ่ายรูป</span><img id="hoPhotoImg" alt="" hidden></label>
+      <input type="file" id="hoPhotoIn" accept="image/*" capture="environment" hidden></div>
+    <div class="field"><label>ลายเซ็นคนรถ * <button type="button" class="linkbtn" id="hoSignClr">ล้าง</button></label>
+      <canvas id="hoSign" class="ho-sign"></canvas><p class="hint">ยืนยันว่ารับพัสดุ ${num(n)} กล่องไปแล้ว</p></div>
+    <div class="field"><label>หมายเหตุ</label><input type="text" id="hoNote" autocomplete="off"></div>
+    <p class="hint bad" id="hoCloseErr"></p></div>
+    <div class="modal-foot"><span style="flex:1"></span><button class="ghost" data-x>กลับไปสแกน</button><button class="ghost solid" data-ok>ยืนยันส่งมอบ</button></div>`, true);
+  const q = s => md.el.querySelector(s);
+  q('#hoDriver').value = lsGet('tmws.hoDriver.' + h.carrier) || '';
+  q('#hoPlate').value = lsGet('tmws.hoPlate.' + h.carrier) || '';
+  let photo = '';
+  q('#hoPhotoIn').onchange = async e => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    q('#hoPhotoTxt').textContent = 'กำลังย่อรูป…';
+    try { photo = await shrinkImage(f, 1280, .72); q('#hoPhotoImg').src = photo; q('#hoPhotoImg').hidden = false; q('#hoPhotoTxt').textContent = '📷 ถ่ายใหม่'; }
+    catch { q('#hoPhotoTxt').textContent = 'อ่านรูปไม่ได้ ลองถ่ายใหม่'; }
+  };
+  const pad = signPad(q('#hoSign'));
+  q('#hoSignClr').onclick = pad.clear;
+  q('[data-x]').onclick = md.close;
+  q('[data-ok]').onclick = async () => {
+    const driver = q('#hoDriver').value.trim(), err = q('#hoCloseErr');
+    if (!driver) { err.textContent = 'ใส่ชื่อคนรถ'; q('#hoDriver').focus(); return; }
+    if (!photo) { err.textContent = 'ถ่ายรูปกองพัสดุกับคนรถ/รถขนส่งก่อน'; return; }
+    if (pad.empty()) { err.textContent = 'ให้คนรถเซ็นชื่อก่อน'; return; }
+    const ok = q('[data-ok]'); ok.disabled = true; ok.textContent = 'กำลังบันทึก…'; err.textContent = '';
+    try {
+      const plate = q('#hoPlate').value.trim();
+      const r = await run('hoClose', S.pin, h.id, { driver, plate, phone: q('#hoPhone').value.trim(), note: q('#hoNote').value.trim(), photo, sign: pad.data() });
+      lsSet('tmws.hoDriver.' + h.carrier, driver); lsSet('tmws.hoPlate.' + h.carrier, plate);
+      md.close(); toast(`ส่งมอบแล้ว ${num(r.count)} กล่อง ให้ ${r.carrier}`);
+      hoBack();
+    } catch (e) { ok.disabled = false; ok.textContent = 'ยืนยันส่งมอบ'; err.textContent = errMsg(e); }
+  };
+}
+function shrinkImage(file, max, quality){
+  return createImageBitmap(file).then(bmp => {
+    const k = Math.min(1, max / Math.max(bmp.width, bmp.height)), cv = document.createElement('canvas');
+    cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+    cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+    return cv.toDataURL('image/jpeg', quality);
+  });
+}
+function signPad(cv){
+  const ctx = cv.getContext('2d'); let drawing = false, used = false, last = null;
+  const size = () => {
+    const r = cv.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+    cv.width = Math.round(r.width * d); cv.height = Math.round(r.height * d);
+    ctx.setTransform(d, 0, 0, d, 0, 0); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, r.width, r.height);
+    ctx.lineWidth = 2.6; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#111'; used = false;
+  };
+  requestAnimationFrame(size);
+  const pt = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  cv.addEventListener('pointerdown', e => { drawing = true; last = pt(e); cv.setPointerCapture(e.pointerId); e.preventDefault(); });
+  cv.addEventListener('pointermove', e => {
+    if (!drawing) return; const p = pt(e);
+    ctx.beginPath(); ctx.moveTo(last[0], last[1]); ctx.lineTo(p[0], p[1]); ctx.stroke(); last = p; used = true; e.preventDefault();
+  });
+  ['pointerup', 'pointercancel'].forEach(t => cv.addEventListener(t, () => { drawing = false; }));
+  return { clear: size, empty: () => !used, data: () => cv.toDataURL('image/png') };
+}
+
+// ---- ใบส่งมอบ (ดูย้อนหลัง/พิมพ์) ----
+async function hoDetail(id){
+  const md = openModal(`<div class="modal-head">ใบส่งมอบพัสดุ</div><div class="modal-body" id="hoDet"><div class="empty">กำลังโหลด…</div></div>
+    <div class="modal-foot"><span style="flex:1"></span><button class="ghost" data-print disabled>พิมพ์ / บันทึก PDF</button><button class="ghost" data-x>ปิด</button></div>`, true);
+  md.el.querySelector('[data-x]').onclick = md.close;
+  const body = md.el.querySelector('#hoDet');
+  let r;
+  try { r = await run('hoGet', S.pin, id); } catch (e) { body.innerHTML = `<div class="warnbox bad">${esc(errMsg(e))}</div>`; return; }
+  const h = r.handover, ps = r.parcels.filter(p => !p.void).sort((a, b) => a.at - b.at);
+  body.innerHTML = `<div class="ho-info">
+      <div><span class="muted">ขนส่ง</span><b>${esc(h.carrier)}</b></div>
+      <div><span class="muted">จำนวน</span><b class="mono">${num(ps.length)} กล่อง</b></div>
+      <div><span class="muted">ส่งมอบเมื่อ</span><b>${h.status === 'closed' ? hoTime(h.closedAt) : h.status === 'open' ? 'ยังไม่ได้ส่งมอบ' : 'ยกเลิก'}</b></div>
+      <div><span class="muted">ผู้ส่งมอบ</span><b>${esc(h.closedBy || h.startedBy)}</b></div>
+      <div><span class="muted">คนรถ</span><b>${esc(h.driver || '-')}</b></div>
+      <div><span class="muted">ทะเบียน / เบอร์</span><b>${esc([h.plate, h.phone].filter(Boolean).join(' · ') || '-')}</b></div>
+      ${h.note ? `<div style="grid-column:1/-1"><span class="muted">หมายเหตุ</span><b>${esc(h.note)}</b></div>` : ''}</div>
+    <div class="ho-proof"><figure><figcaption>รูปถ่าย</figcaption><img id="hoDetPhoto" alt="รูปถ่ายตอนส่งมอบ" hidden><span class="muted" id="hoDetPhotoT">${h.hasPhoto ? 'กำลังโหลดรูป…' : 'ไม่มี'}</span></figure>
+      <figure><figcaption>ลายเซ็นคนรถ</figcaption><img id="hoDetSign" alt="ลายเซ็นคนรถ" hidden class="sig"><span class="muted" id="hoDetSignT">${h.hasSign ? 'กำลังโหลด…' : 'ไม่มี'}</span></figure></div>
+    <div class="tbl"><table><thead><tr><th>#</th><th>เลขพัสดุ</th><th>สแกน</th><th>สถานะใน JST</th></tr></thead><tbody>` +
+    ps.map((p, i) => `<tr><td class="n">${i + 1}</td><td class="mono">${esc(p.tracking)}</td><td>${hoTime(p.at)}<br><span class="muted">${esc(p.by)}</span></td>
+      <td>${hoJstPill(p)}${p.jstText && p.jst !== 'missing' ? `<br><span class="muted">${esc(p.jstText)}${p.jstCarrier ? ' · ' + esc(p.jstCarrier) : ''}</span>` : ''}${p.follow ? `<br>📝 ${esc(p.follow)}` : ''}</td></tr>`).join('') +
+    `</tbody></table></div>`;
+  const imgs = {};
+  const load = async (which, img, txt) => {
+    try { const d = await run('hoFile', S.pin, h.id, which); if (d) { imgs[which] = d; const el = md.el.querySelector(img); el.src = d; el.hidden = false; md.el.querySelector(txt).hidden = true; } }
+    catch { md.el.querySelector(txt).textContent = 'โหลดรูปไม่ได้'; }
+  };
+  await Promise.all([h.hasPhoto && load('photo', '#hoDetPhoto', '#hoDetPhotoT'), h.hasSign && load('sign', '#hoDetSign', '#hoDetSignT')]);
+  const pb = md.el.querySelector('[data-print]'); pb.disabled = false;
+  pb.onclick = () => hoPrint(h, ps, imgs);
+}
+function hoPrint(h, ps, imgs){
+  const w = window.open('', '_blank');
+  if (!w) { toast('เบราว์เซอร์บล็อกหน้าต่างใหม่ — อนุญาตป๊อปอัปแล้วลองอีกครั้ง'); return; }
+  w.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ใบส่งมอบพัสดุ ${esc(h.carrier)} ${esc(hoTime(h.closedAt))}</title>
+    <style>body{font-family:"IBM Plex Sans Thai","Leelawadee UI",sans-serif;margin:24px;color:#111;font-size:13px}h1{font-size:20px;margin:0 0 4px}
+    .g{display:grid;grid-template-columns:1fr 1fr;gap:4px 24px;margin:12px 0}table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:4px 6px;text-align:left}
+    .p{display:flex;gap:16px;margin:12px 0;align-items:flex-start}.p img{max-width:48%;max-height:260px;border:1px solid #ccc}.m{font-family:Consolas,monospace}</style></head><body>
+    <h1>ใบส่งมอบพัสดุให้ขนส่ง — 2NK</h1><div>เลขที่ ${esc(h.id)}</div>
+    <div class="g"><div>ขนส่ง: <b>${esc(h.carrier)}</b></div><div>จำนวน: <b>${ps.length} กล่อง</b></div>
+    <div>ส่งมอบเมื่อ: <b>${esc(hoTime(h.closedAt))}</b></div><div>ผู้ส่งมอบ (2NK): <b>${esc(h.closedBy)}</b></div>
+    <div>คนรถ: <b>${esc(h.driver)}</b></div><div>ทะเบียน / เบอร์: <b>${esc([h.plate, h.phone].filter(Boolean).join(' · ') || '-')}</b></div>
+    ${h.note ? `<div>หมายเหตุ: ${esc(h.note)}</div>` : ''}</div>
+    <div class="p">${imgs.photo ? `<img src="${imgs.photo}" alt="รูปถ่าย">` : ''}${imgs.sign ? `<div><div>ลายเซ็นคนรถ (ยืนยันรับ ${ps.length} กล่อง)</div><img src="${imgs.sign}" alt="ลายเซ็น" style="max-width:100%"></div>` : ''}</div>
+    <table><thead><tr><th>#</th><th>เลขพัสดุ</th><th>เวลาสแกน</th><th>ผู้สแกน</th></tr></thead><tbody>
+    ${ps.map((p, i) => `<tr><td>${i + 1}</td><td class="m">${esc(p.tracking)}</td><td>${esc(hoTime(p.at))}</td><td>${esc(p.by)}</td></tr>`).join('')}</tbody></table>
+    <script>setTimeout(function(){print()},400)<\/script></body></html>`);
+  w.document.close();
+}
+function hoFollowDlg(p){
+  if (!p) return;
+  const md = openModal(`<div class="modal-head">บันทึกการติดตาม <span class="mono">${esc(p.tracking)}</span></div><div class="modal-body">
+    <p class="hint">${esc(p.h.carrier || '')} · ส่งมอบ ${hoTime(p.h.closedAt)} · คนรถ ${esc(p.h.driver || '-')}</p>
+    <div class="field"><label>ทำอะไรไปแล้ว</label><input type="text" id="hoFollowIn" value="${esc(p.follow)}" placeholder="เช่น โทรแจ้งสาขาแล้ว / เปิดเคลมเลขที่ … / ส่งของใหม่ให้ลูกค้าแล้ว"></div>
+    <label class="check"><input type="checkbox" id="hoDone"> ปิดเรื่องแล้ว (ขนส่งยืนยัน/ชดใช้แล้ว) — เอาออกจากรายการต้องติดตาม</label></div>
+    <div class="modal-foot"><span style="flex:1"></span><button class="ghost" data-x>ยกเลิก</button><button class="ghost solid" data-ok>บันทึก</button></div>`);
+  md.el.querySelector('[data-x]').onclick = md.close;
+  md.el.querySelector('[data-ok]').onclick = async () => {
+    const note = md.el.querySelector('#hoFollowIn').value.trim(), done = md.el.querySelector('#hoDone').checked;
+    if (!note && !done) { md.el.querySelector('#hoFollowIn').focus(); return; }
+    try { await run('hoFollow', S.pin, p.id, note, done); md.close(); toast('บันทึกแล้ว'); hoLoad(true); } catch (e) { toast(errMsg(e)); }
+  };
+}
+async function hoCheck(btn){
+  btn.disabled = true; btn.textContent = 'กำลังเช็กกับ JST… (อาจใช้ 1–4 นาที)';
+  try { const r = await run('hoCheckNow', S.pin); toast(`เช็กแล้ว: รอยืนยัน ${num(r.pending)} กล่อง · ต้องติดตาม ${num(r.flagged)}`); }
+  catch (e) { toast(e.message === 'JST_CAPTCHA' ? 'JST ขอ CAPTCHA — ล็อกอินเว็บ JST ด้วยบัญชีระบบ 1 ครั้งแล้วลองใหม่' : errMsg(e)); }
+  hoLoad(true);
+}
+
 // ---------- sync ----------
 let busy = false, polls = 0;
 /** apply a counts reply; returns true when the saved round is gone and another open round was picked (needs a reload) */
@@ -1561,7 +1956,7 @@ async function startApp(init){
   if (init.rounds && !applyCounts(init)) render(); else await refresh(true);
   if (!timersOn) {
     timersOn = true;
-    setInterval(() => { if (S.me && document.visibilityState === 'visible') refresh(); }, POLL_MS);
+    setInterval(() => { if (S.me && document.visibilityState === 'visible') { refresh(); if (S.view === 'ho') hoPoll(); } }, POLL_MS);
     setInterval(() => { if (S.me && document.visibilityState === 'visible') loadProducts(); }, 3 * 60e3); // picks up rows added to the Products sheet
   }
 }
