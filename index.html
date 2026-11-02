@@ -1429,6 +1429,13 @@ const ssGet = k => { try { return sessionStorage.getItem(k); } catch { return nu
 const ssSet = (k, v) => { try { v == null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, v); } catch {} };
 function saveToken(t, remember){ S.pin = t || ''; lsSet('tmws.token', remember && t ? t : ''); ssSet('tmws.token', t || null); }
 const ROLE_NAME = { admin: 'ผู้ดูแลระบบ', user: 'ผู้ใช้งาน', handover: 'ผู้ส่งมอบสินค้า' };
+// server VERSION 'YYYY-MM-DD.N' compared as numbers ('…02.11' is newer than '…02.3'; plain text comparison got it wrong)
+function verAtLeast(v, min){
+  const p = s => String(s || '').split(/[-.]/).map(Number);
+  const a = p(v), b = p(min);
+  for (let i = 0; i < b.length; i++) { if ((a[i] || 0) !== b[i]) return (a[i] || 0) > b[i]; }
+  return true;
+}
 const roleBadge = r => `<span class="role ${ROLE_NAME[r] ? r : 'user'}">${ROLE_NAME[r] || ROLE_NAME.user}</span>`;
 // ผู้ส่งมอบสินค้า: sees and uses only the handover tab (the server refuses everything else too)
 const hoOnly = () => !!(S.me && S.me.role === 'handover');
@@ -1642,7 +1649,7 @@ function openUserForm(u){
     <div class="field"><label>${isNew ? 'รหัสผ่าน * (อย่างน้อย 6 ตัว)' : 'ตั้งรหัสผ่านใหม่ (เว้นว่าง = ไม่เปลี่ยน)'}</label>
       <div class="pw"><input id="ufPass" type="text" autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="${isNew ? '' : 'เว้นว่างถ้าไม่เปลี่ยน'}"><button type="button" id="ufGen">สุ่ม</button></div></div>
     <div class="grid2 keep">
-      <div class="field"><label for="ufRole">สิทธิ์</label><select id="ufRole">${['user', 'handover', 'admin'].filter(r => r !== 'handover' || (S.version || '') >= '2026-11-02.3' || u.role === r).map(r => `<option value="${r}" ${(ROLE_NAME[u.role] ? u.role : 'user') === r ? 'selected' : ''}>${ROLE_NAME[r]}</option>`).join('')}</select></div>
+      <div class="field"><label for="ufRole">สิทธิ์</label><select id="ufRole">${['user', 'handover', 'admin'].filter(r => r !== 'handover' || verAtLeast(S.version, '2026-11-02.3') || u.role === r).map(r => `<option value="${r}" ${(ROLE_NAME[u.role] ? u.role : 'user') === r ? 'selected' : ''}>${ROLE_NAME[r]}</option>`).join('')}</select></div>
       <div class="field"><label>สถานะ</label><label class="rem" style="padding:10px 0"><input type="checkbox" id="ufActive" ${u.active ? 'checked' : ''}> เปิดใช้งาน</label></div>
     </div>
     <div class="muted" style="font-size:13px">ผู้ส่งมอบสินค้า = เห็นและใช้ได้เฉพาะแท็บส่งมอบ (สแกนพัสดุให้ขนส่ง) ไม่เห็นการนับสต๊อก/สต๊อก JST</div>
