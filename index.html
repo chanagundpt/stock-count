@@ -35,6 +35,9 @@
 [hidden]{display:none!important}
 html,body{margin:0}
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+/* Android (bigger system text / narrow screens) slid sideways: nothing may be wider than the screen */
+html,body{max-width:100%;overflow-x:clip}
+.item .mono,.t1 .mono{overflow-wrap:anywhere}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;padding-top:env(safe-area-inset-top,0px)}
 .wrap{max-width:640px;margin:0 auto;padding-inline:16px;padding-block:0 calc(88px + env(safe-area-inset-bottom,0px))}
 header.top{position:sticky;top:0;z-index:5;background:var(--bg);padding-block:12px 10px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);margin-bottom:14px}
@@ -132,9 +135,9 @@ tr.void td{text-decoration:line-through;color:var(--muted)}
 .notice{padding:10px 12px;border-radius:8px;background:var(--warn-soft);color:var(--ink);font-size:14px;margin-bottom:12px;display:flex;flex-direction:column;gap:8px}
 .sync{font-size:12px;color:var(--muted);text-align:right;margin:-6px 0 8px}
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:10;background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom,0px)}
-nav.tabs .in{display:grid;grid-template-columns:repeat(6,1fr);width:100%;max-width:640px}
+nav.tabs .in{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));width:100%;max-width:640px}
 @media (max-width:420px){nav.tabs button{font-size:11px;padding-inline:2px}}
-nav.tabs button{font:inherit;font-size:13px;font-weight:600;border:0;background:transparent;color:var(--muted);padding:9px 4px 11px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer}
+nav.tabs button{font:inherit;font-size:13px;font-weight:600;border:0;background:transparent;color:var(--muted);padding:9px 4px 11px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;min-width:0;overflow-wrap:anywhere;text-align:center;line-height:1.25}
 nav.tabs button svg{width:22px;height:22px}
 nav.tabs button[aria-current=page]{color:var(--accent)}
 #toast{position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:600;font-size:14px;max-width:calc(100% - 32px);z-index:20;box-shadow:0 6px 20px rgb(0 0 0 / .25)}
@@ -279,6 +282,7 @@ canvas.ho-sign{width:100%;height:170px;border:1.5px dashed var(--line);border-ra
 .ho-tabs{margin-bottom:12px;width:100%}
 .ho-tabs button{flex:1;font-size:15px;padding:9px}
 button.primary.ho-start{width:100%;font-size:20px;padding:18px}
+button.ho-start,#hoClose{width:100%;white-space:normal;line-height:1.35}
 .chip.unk{border-style:dashed;color:var(--warn)}
 .ho-range{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
 .ho-range input{width:100%;font:inherit;font-size:16px;padding:9px 10px;border:1.5px solid var(--line);border-radius:var(--r);background:var(--bg);color:var(--ink);min-width:0}
@@ -1503,8 +1507,10 @@ function showLogin(msg){
     </form>
     ${S.canSignup
       ? '<div class="login-foot">ยังไม่มีบัญชี?<br><button class="ghost" type="button" id="lgSignup" style="margin-top:8px">＋ สมัครใช้งาน</button></div>'
-      : '<div class="login-foot">ยังไม่มีบัญชี? ติดต่อผู้ดูแลระบบเพื่อขอชื่อผู้ใช้และรหัสผ่าน</div>'}`);
+      : '<div class="login-foot">ยังไม่มีบัญชี? ติดต่อผู้ดูแลระบบเพื่อขอชื่อผู้ใช้และรหัสผ่าน</div>'}
+    ${verAtLeast(S.version, '2026-11-02.14') ? '<div class="login-foot" style="margin-top:6px"><button class="ghost" type="button" id="lgSignupHo">＋ สมัครสมาชิกเฉพาะการส่งมอบสินค้า</button></div>' : ''}`);
   const sb = $('#lgSignup'); if (sb) sb.onclick = showSignup;
+  const sh = $('#lgSignupHo'); if (sh) sh.onclick = showSignupHo;
   if (msg) setLoginErr(msg);
   const u = $('#lgUser'), pw = $('#lgPass');
   u.value = lsGet('tmws.lastUser') || '';
@@ -1589,6 +1595,45 @@ function suPick(nick){
     } catch (ex) { err(ex.message); b.disabled = false; b.textContent = 'สร้างบัญชีและเข้าสู่ระบบ'; }
   };
 }
+// สมัครเฉพาะการส่งมอบสินค้า: account sees only the handover tab; nickname, full name, phone, own username + password
+function showSignupHo(){
+  showLoginShell(`<div><b style="font-size:17px">สมัครสมาชิกเฉพาะการส่งมอบสินค้า</b><div class="muted" style="font-size:13px">บัญชีนี้ใช้ได้เฉพาะแท็บส่งมอบ (สแกนพัสดุให้ขนส่ง)</div></div>
+    <form id="shForm" novalidate style="display:grid;gap:12px">
+      <div class="field"><label for="shNick">ชื่อเล่น *</label><input id="shNick" type="text" autocomplete="nickname"></div>
+      <div class="field"><label for="shName">ชื่อ-นามสกุลจริง *</label><input id="shName" type="text" autocomplete="name"></div>
+      <div class="field"><label for="shPhone">เบอร์โทร *</label><input id="shPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="08xxxxxxxx"></div>
+      <div class="field"><label for="shU">Username <span class="muted">(a-z 0-9 . _ - อย่างน้อย 3 ตัว)</span></label><input id="shU" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false"></div>
+      <div class="field"><label for="shP">รหัสผ่าน <span class="muted">(อย่างน้อย 6 ตัว)</span></label><div class="pw"><input id="shP" type="password" autocomplete="new-password"><button type="button" id="shEye">แสดง</button></div></div>
+      <div class="field"><label for="shP2">ยืนยันรหัสผ่าน</label><input id="shP2" type="password" autocomplete="new-password"></div>
+      <label class="rem"><input type="checkbox" id="shR" checked> จดจำการเข้าสู่ระบบในเครื่องนี้ (30 วัน)</label>
+      <div class="lg-err" id="shErr"></div>
+      <button class="primary" type="submit" id="shBtn">สร้างบัญชีและเข้าสู่ระบบ</button>
+    </form>
+    <button class="ghost" type="button" id="shBack">← กลับไปหน้าเข้าสู่ระบบ</button>`);
+  $('#shBack').onclick = () => { $('#login').innerHTML = ''; showLogin(); };
+  $('#shEye').onclick = () => { const p = $('#shP'), show = p.type === 'password'; p.type = show ? 'text' : 'password'; $('#shEye').textContent = show ? 'ซ่อน' : 'แสดง'; };
+  setTimeout(() => $('#shNick').focus(), 50);
+  $('#shForm').onsubmit = async e => {
+    e.preventDefault();
+    const err = m => { const x = $('#shErr'); x.textContent = m; x.classList.toggle('show', !!m); };
+    const v = id => $(id).value.trim(), phone = v('#shPhone').replace(/\D/g, ''), u = v('#shU'), pw = $('#shP').value;
+    if (!v('#shNick')) return err('กรอกชื่อเล่น');
+    if (!/\S+\s+\S+/.test(v('#shName'))) return err('กรอกชื่อและนามสกุล (เว้นวรรคระหว่างชื่อกับนามสกุล)');
+    if (!/^0\d{8,9}$/.test(phone)) return err('เบอร์โทรไม่ถูกต้อง (เช่น 0812345678)');
+    if (!/^[A-Za-z0-9._-]{3,30}$/.test(u)) return err('Username ใช้ได้เฉพาะ a-z 0-9 . _ - ยาว 3–30 ตัว');
+    if (pw.length < 6) return err('รหัสผ่านต้องยาวอย่างน้อย 6 ตัวอักษร');
+    if (pw !== $('#shP2').value) return err('รหัสผ่านทั้งสองช่องไม่ตรงกัน');
+    const b = $('#shBtn'); b.disabled = true; b.textContent = 'กำลังสร้างบัญชี…'; err('');
+    try {
+      const keep = $('#shR').checked;
+      const r = await run('signupHandover', { nick: v('#shNick'), fullName: v('#shName'), phone, username: u, password: pw, remember: keep });
+      saveToken(r.token, keep);
+      lsSet('tmws.lastUser', u);
+      await startApp(r.init || await run('getInit', r.token, ''));
+      toast('สร้างบัญชีเรียบร้อย ยินดีต้อนรับ ' + (r.me.name || r.me.username));
+    } catch (ex) { err(ex.message); b.disabled = false; b.textContent = 'สร้างบัญชีและเข้าสู่ระบบ'; }
+  };
+}
 function showSetupNeeded(){
   showLoginShell(`<div class="lg-err show" style="background:var(--warn-soft);color:var(--ink)">ยังไม่มีบัญชีผู้ดูแลระบบ</div>
     <div style="font-size:14px;line-height:1.7">สำหรับเจ้าของระบบ:<br>1. เปิด Google Sheet ของ Stock count<br>2. เมนู <b>2nk Stock count → สร้าง / รีเซ็ตบัญชีผู้ดูแลระบบ</b><br>3. กลับมารีเฟรชหน้านี้ แล้วเข้าสู่ระบบ</div>
@@ -1645,7 +1690,7 @@ async function openUsersAdmin(){
     <div class="muted" style="font-size:13px">เฉพาะผู้ที่มีบัญชีเท่านั้นที่เข้าใช้ Stock Count ได้ • ผู้ดูแลระบบจัดการผู้ใช้ได้ ผู้ใช้งานทั่วไปนับสต๊อกและดูข้อมูลได้ทุกอย่าง</div>
     <div class="muted" style="font-size:13px">พนักงานสมัครเองได้จากหน้าเข้าสู่ระบบ (เลือกชื่อจากรายชื่อพนักงานที่คัดลอกจาก 2NK เวรวันเสาร์) · บัญชีของ Stock Count แยกจากแอปเวร</div>
     <div class="tbl"><table class="utable"><tr><th class="nm">ชื่อผู้ใช้งาน</th><th>ชื่อผู้ใช้ (login)</th><th>สิทธิ์</th><th>เข้าใช้ล่าสุด</th><th></th></tr>
-      ${users.map(u => `<tr><td class="nm"><b>${esc(u.name)}</b>${u.created_by && /^สมัครเอง/.test(u.created_by) ? ' <span class="role user">สมัครเอง</span>' : ''}${u.active ? '' : ' <span class="off">ปิดใช้งาน</span>'}<span class="sub">@${esc(u.username)} · ${u.last_login ? 'เข้าใช้ ' + esc(fmtTime(u.last_login)) : 'ยังไม่เคยเข้าใช้'}</span></td><td>${esc(u.username)}</td>
+      ${users.map(u => `<tr><td class="nm"><b>${esc(u.name)}</b>${u.created_by && /^สมัครเอง/.test(u.created_by) ? ` <span class="role user">${/ส่งมอบ/.test(u.created_by) ? 'สมัครเอง · ส่งมอบ' : 'สมัครเอง'}</span>` : ''}${u.active ? '' : ' <span class="off">ปิดใช้งาน</span>'}<span class="sub">${u.full_name ? esc(u.full_name) + (u.phone ? ' · ' + esc(u.phone) : '') + '<br>' : ''}@${esc(u.username)} · ${u.last_login ? 'เข้าใช้ ' + esc(fmtTime(u.last_login)) : 'ยังไม่เคยเข้าใช้'}</span></td><td>${esc(u.username)}</td>
         <td>${roleBadge(u.role)}</td><td class="muted">${u.last_login ? esc(fmtTime(u.last_login)) : 'ยังไม่เคย'}</td>
         <td><button class="ghost" data-edit="${esc(u.username)}">แก้ไข</button></td></tr>`).join('')}
     </table></div>
@@ -2050,6 +2095,10 @@ async function hoPump(){
       catch (e) {
         if (e.message === 'AUTH_REQUIRED') { authLost(); break; }
         if (e.message === 'เชื่อมต่อไม่ได้') { await new Promise(r => setTimeout(r, 3000)); continue; } // no signal: keep it queued and retry
+        // several phones at once: the server queue was full / Google limited simultaneous runs → wait a moment and send it again
+        if (/^BUSY|Lock timeout|simultaneous|too many|Service invoked|try again|ลองใหม่อีกครั้ง/i.test(e.message || '') && (p.tries = (p.tries || 0) + 1) <= 6) {
+          await new Promise(r => setTimeout(r, 800 * p.tries + Math.random() * 700)); continue;
+        }
         const m = e.message || '';
         // only numbers found in JST (tracking or order number) are taken: refused scans leave the list, nothing is saved
         const drop = () => { HO.items = HO.items.filter(x => x !== p); };
