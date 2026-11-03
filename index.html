@@ -125,6 +125,7 @@ button.ghost.danger{color:var(--bad);border-color:var(--bad)}
 .sku > button.head:focus-visible{outline:3px solid var(--accent);outline-offset:-3px}
 .sku .exps{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
 .sku .detail{padding:0 14px 12px}
+.sku .jq{font-size:13px;color:var(--muted);white-space:nowrap;margin-top:2px}
 .tbl{overflow-x:auto}
 table{border-collapse:collapse;width:100%;font-size:13px}
 th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
@@ -1190,7 +1191,7 @@ function renderSummary(){
           h('div', { class: 't1' }, h('b', { text: g.name || '(ไม่มีชื่อ)' }), h('span', { class: 'mono muted', text: g.sku || g.key })),
           h('div', { class: 'exps' }, exps.map(([e, qn]) => h('span', { class: 'chip', style: 'cursor:inherit' }, h('span', { text: fmtExp(e) }), h('b', { text: num(qn) }), pill(e)))),
           h('div', { class: 't2', text: `${g.n} ครั้ง` + (g.locs.size ? ' · ' + [...g.locs].join(', ') : '') + (g.sku ? '' : ' · ยังไม่มี SKU ในฐานข้อมูล') })),
-        h('div', { class: 'qty', text: num(g.total) })),
+        h('div', { style: 'text-align:right' }, h('div', { class: 'qty', text: num(g.total) }), jqLine(g))),
       isOpen ? h('div', { class: 'detail' }, h('div', { class: 'tbl' }, h('table', {},
         h('thead', {}, h('tr', {}, ['ตำแหน่ง', 'EXP', 'ล็อต', 'จำนวน', 'คนนับ', 'เวลา'].map(t => h('th', { text: t })))),
         h('tbody', {}, g.entries.slice().sort((a, b) => a.at - b.at).map(c => h('tr', { class: c.void ? 'void' : '' },
@@ -1198,6 +1199,30 @@ function renderSummary(){
           h('td', { class: 'n', text: num(c.qty) }), h('td', { text: c.by || '–' }), h('td', { text: fmtTime(c.at) + (c.void ? ' (ยกเลิก)' : '') }))))))) : null));
   }
   box.append(wrap);
+  loadJq(all.map(g => g.sku));
+}
+// JST "สินค้าคงคลัง" (same number as the count page) beside each counted total; fetched in one call, kept 2 min
+const JQ = { qty: new Map(), at: new Map(), busy: false, off: false, err: '' };
+function jqLine(g){
+  if (!g.sku || JQ.off) return null;
+  const t = JQ.qty.has(g.sku) ? 'JST ' + num(JQ.qty.get(g.sku)) : JQ.at.has(g.sku) ? (JQ.err ? 'JST –' : 'ไม่พบใน JST') : 'JST …';
+  return h('div', { class: 'jq', title: 'สต๊อก JST ตอนนี้ (สินค้าคงคลัง)', text: t });
+}
+async function loadJq(skus){
+  if (JQ.busy || JQ.off || !S.pin) return;
+  const now = Date.now(), need = [...new Set(skus.filter(Boolean))].filter(s => !(now - (JQ.at.get(s) || 0) < 120e3));
+  if (!need.length) return;
+  JQ.busy = true;
+  try {
+    const r = await run('jstQty', need, S.pin);
+    need.forEach(s => { JQ.at.set(s, r.at); if (s in r.qty) JQ.qty.set(s, r.qty[s]); else JQ.qty.delete(s); });
+    JQ.err = '';
+  } catch (e) {
+    // older server without jstQty → hide the JST line; JST errors (e.g. CAPTCHA) → show "JST –" and retry after 2 min
+    if (/unknown function|not a function/i.test(e.message || '')) JQ.off = true;
+    else { JQ.err = errMsg(e); need.forEach(s => JQ.at.set(s, Date.now())); }
+  } finally { JQ.busy = false; }
+  if (S.view === 'sum') renderSummary();
 }
 const kpi = (v, l, alert) => h('div', { class: 'kpi' + (alert ? ' alert' : '') }, h('div', { class: 'v', text: v }), h('div', { class: 'l', text: l }));
 $('#q').addEventListener('input', e => { S.q = e.target.value; renderSummary(); });
