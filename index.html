@@ -2402,7 +2402,7 @@ function hoCloseDlg(){
     const files = [...(e.target.files || [])].slice(0, MAX_PHOTOS - photos.length); e.target.value = '';
     if (!files.length) return;
     q('#hoPhotoTxt').textContent = 'กำลังย่อรูป…';
-    for (const f of files) { try { photos.push(await shrinkImage(f, 1280, .72)); } catch { toast('อ่านรูปไม่ได้ ลองถ่ายใหม่'); } }
+    for (const f of files) { try { photos.push(await shrinkImage(f, 1280, .72)); } catch { toast('รูปนี้อ่านไม่ได้ (ไฟล์เสีย) — ถ่ายใหม่อีกครั้ง'); } }
     drawThumbs();
   };
   const pad = signPad(q('#hoSign'));
@@ -2433,13 +2433,32 @@ function hoCloseDlg(){
     } catch (e) { ok.disabled = false; ok.textContent = 'ยืนยันส่งมอบ'; err.textContent = errMsg(e); }
   };
 }
-function shrinkImage(file, max, quality){
-  return createImageBitmap(file).then(bmp => {
-    const k = Math.min(1, max / Math.max(bmp.width, bmp.height)), cv = document.createElement('canvas');
-    cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
-    cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+// 3 พ.ย.: one sign-off photo was saved empty (0 bytes) — the phone handed back a blank picture. Every shrunk photo is now
+// decoded again before it is taken; if the fast way fails, a second way (<img> from the file) is tried; still bad = "ถ่ายใหม่"
+async function shrinkImage(file, max, quality){
+  const draw = (src, w, h) => {
+    const k = Math.min(1, max / Math.max(w, h)), cv = document.createElement('canvas');
+    cv.width = Math.round(w * k); cv.height = Math.round(h * k);
+    if (!cv.width || !cv.height) throw new Error('empty');
+    cv.getContext('2d').drawImage(src, 0, 0, cv.width, cv.height);
     return cv.toDataURL('image/jpeg', quality);
+  };
+  const viaBitmap = async () => { const bmp = await createImageBitmap(file); try { return draw(bmp, bmp.width, bmp.height); } finally { bmp.close && bmp.close(); } };
+  const viaImg = () => new Promise((res, rej) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => { try { res(draw(img, img.naturalWidth, img.naturalHeight)); } catch (e) { rej(e); } finally { URL.revokeObjectURL(url); } };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('decode')); };
+    img.src = url;
   });
+  for (const way of [viaBitmap, viaImg]) {
+    try { const d = await way(); if (await photoOk(d)) return d; } catch {}
+  }
+  throw new Error('รูปนี้อ่านไม่ได้ ถ่ายใหม่');
+}
+// a real JPEG: long enough and it opens again with a size
+function photoOk(d){
+  if (!/^data:image\/jpeg;base64,/.test(d || '') || d.length < 4000) return Promise.resolve(false);
+  return new Promise(res => { const i = new Image(); i.onload = () => res(i.naturalWidth > 10 && i.naturalHeight > 10); i.onerror = () => res(false); i.src = d; });
 }
 function signPad(cv){
   const ctx = cv.getContext('2d'); let drawing = false, used = false, last = null;
