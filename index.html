@@ -2054,7 +2054,7 @@ function hoGapHtml(){
         <div class="${miss.length ? 'alert' : ''}"><div class="v" style="color:${miss.length ? 'var(--bad)' : 'var(--muted)'}">${num(miss.length)}</div><div class="l">ไม่ได้สแกน</div></div></div>
       ${d.complete ? '' : '<p class="hint bad">ดึงจาก JST ไม่ครบ (หมดเวลา) — ตัวเลขอาจน้อยกว่าจริง กด "เทียบใหม่" อีกครั้ง</p>'}
       ${g.err ? `<p class="hint bad">${esc(g.err)}</p>` : ''}
-      ${!f.carrier && groups.length > 1 ? `<div class="ho-gapby">` + groups.map(x => `<button type="button" data-act="gapcar" data-k="${esc(x.k)}"><span>${esc(x.name)}</span><span class="muted">${num(x.n)}</span><b style="color:${x.miss ? 'var(--bad)' : 'var(--ok)'}">${x.miss ? 'ขาด ' + num(x.miss) : '✓ ครบ'}</b></button>`).join('') + `</div>` : ''}
+      ${!f.carrier && groups.length > 1 ? `<div class="ho-gapby">` + groups.map(x => `<button type="button" data-act="gapcar" data-k="${esc(x.k)}"><span>${esc(x.name)}</span><span class="muted">${num(x.n)}</span><b style="color:${x.miss ? 'var(--bad)' : 'var(--ok)'}">${x.miss ? '✕ ขาด ' + num(x.miss) : '✓ ครบ'}</b></button>`).join('') + `</div>` : ''}
       ${miss.length ? `<button type="button" class="ghost ho-gaptoggle" data-act="gaplist" aria-expanded="${!!HO.gapOpen}">${HO.gapOpen ? '▲ ซ่อนรายการ' : '▼ ดูรายการที่ไม่ได้สแกน (' + num(miss.length) + ')'}</button>`
         + (HO.gapOpen ? `<div class="ho-gaplist">` + miss.slice(0, 300).map(o => `<div class="ho-gapitem">
           <div class="t1"><b class="mono">${esc(o[0])}</b><span class="muted">${esc(o[4].slice(11))}</span></div>
@@ -2062,7 +2062,7 @@ function hoGapHtml(){
           + (miss.length > 300 ? `<p class="hint">แสดง 300 จาก ${num(miss.length)} — ดาวน์โหลด Excel เพื่อดูทั้งหมด</p>` : '') + `</div>`
           + `<button class="ghost" data-act="gapcsv" style="margin-top:8px">ดาวน์โหลดรายการที่ไม่ได้สแกน (.csv)</button>` : '')
         : `<p class="hint" style="color:var(--ok)">✓ ทุกออเดอร์ที่ JST จัดส่งในช่วงนี้ถูกสแกนส่งมอบแล้ว</p>`}
-      <p class="hint" style="margin-top:8px">นับออเดอร์ในแท็บ JST "จัดส่งแล้ว" ที่เวลาจัดส่งอยู่ในวันที่เลือก · ข้อมูล ${hoTime(d.at)}</p>`;
+      <p class="hint" style="margin-top:8px">นับออเดอร์ในแท็บ JST "จัดส่งแล้ว" ที่เวลาจัดส่งอยู่ในวันที่เลือก · ข้อมูล ${hoTime(d.at)}${d.ms ? ` · ดึง ${num(d.pages || 0)} หน้า ${Math.round(d.ms / 1000)} วิ` : ''}</p>`;
   }
   return `<section class="card ho-gap"><div class="ho-gaphead"><div><b>ออเดอร์ใน JST ที่ไม่ได้สแกนส่งมอบ</b><div class="hint">เทียบออเดอร์ที่ JST จัดส่งแล้ว กับกล่องที่สแกนในแอป</div></div>${btn}</div>${body}</section>
     <h2 class="ho-sub">กล่องที่สแกนส่งมอบ</h2>`;
