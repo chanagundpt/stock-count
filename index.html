@@ -285,6 +285,8 @@ canvas.ho-sign{width:100%;height:170px;border:1.5px dashed var(--line);border-ra
 button.primary.ho-start{width:100%;font-size:20px;padding:18px}
 button.ho-start,#hoClose{width:100%;white-space:normal;line-height:1.35}
 .chip.unk{border-style:dashed;color:var(--warn)}
+.ho-gap{margin:10px 0}
+.ho-gapsum{display:flex;flex-wrap:wrap;gap:6px 16px;margin:8px 0;font-size:15px}
 .ho-range{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
 .ho-range input{width:100%;font:inherit;font-size:16px;padding:9px 10px;border:1.5px solid var(--line);border-radius:var(--r);background:var(--bg);color:var(--ink);min-width:0}
 .ho-range .field span{font-size:13px;font-weight:600;color:var(--muted)}
@@ -1128,10 +1130,12 @@ $('#countForm').addEventListener('submit', async e => {
   const btn = $('#save'); btn.disabled = true; btn.textContent = 'กำลังบันทึก…';
   const before = countsFor(sel.key).reduce((a, c) => a + c.qty, 0);
   const label = sel.isNew ? newName : (sel.name || sel.key);
+  // the JST stock shown on screen is saved with the count, so reports compare with the stock at count time (server fills it in if not loaded yet)
+  const live = LIVE.get(sel.key), jst = live && live.state === 'ok' ? { qty: live.qty, at: live.at } : null;
   try {
     const saved = await run('addCount', {
       round: r.id, sku: sel.sku || sel.key, barcode: sel.barcode, name: sel.isNew ? newName : sel.name, isNew: sel.isNew,
-      qty, exp, lot, loc, counter: me }, S.pin);
+      qty, exp, lot, loc, counter: me, jst }, S.pin);
     S.counts.push(saved);
     if (sel.isNew) loadProducts();
     toast(`บันทึกแล้ว ${label} +${num(qty)} → รวม ${num(before + qty)} ชิ้น`);
@@ -1950,6 +1954,7 @@ function renderHoReport(el){
       <div class="kpi${cnt('issue') ? ' alert' : ''}" data-act="stat" data-stat="issue" role="button" tabindex="0" aria-pressed="${f.status === 'issue'}"><div class="v">${num(cnt('issue'))}</div><div class="l">⚠ ต้องติดตาม</div></div></div>
       <div class="toolbar"><button class="ghost" data-act="csv" ${rows.length ? '' : 'disabled'}>ดาวน์โหลด Excel (.csv)</button>
       <span class="hint">${HO.repLoading ? 'กำลังโหลด…' : R ? 'ข้อมูล ' + hoTime(R.at) : ''}</span></div>`;
+    html += hoGapHtml();
     html += rows.length ? `<div class="list">` + rows.slice(0, 300).map(p => `<button class="item ho-row" data-act="detail" data-id="${esc(p.ho)}"><div class="main">
         <div class="t1"><b class="mono">${esc(p.tracking)}</b>${hoJstPill({ jst: p.jst, flaggedAt: p.issue, done: false })}${p.scanCode ? `<span class="muted" style="font-size:12px">สแกนเลข ${esc(p.scanCode)}</span>` : ''}</div>
         <div class="t2"><b>${esc(p.carrier || 'ไม่ทราบขนส่ง')}</b> · ${esc(p.shop || 'ไม่ระบุช่องทาง')} · สแกน ${hoTime(p.at)} โดย ${esc(p.by)}${p.driver ? ' · คนรถเซ็นรับ ' + esc(p.driver) : ''}${p.orderId ? ' · ออเดอร์ ' + esc(p.orderId) : ''}</div>
@@ -1972,6 +1977,15 @@ function renderHoReport(el){
   const qi = el.querySelector('input[data-f=q]');
   qi.oninput = () => { f.q = qi.value; renderHo(); };
   if (focused) { const n = el.querySelector('input[data-f=q]'); n.focus(); n.setSelectionRange(pos, pos); }
+  const gb = el.querySelector('[data-act=gap]');
+  if (gb) gb.onclick = () => hoGapLoad(true);
+  const gc = el.querySelector('[data-act=gapcsv]');
+  if (gc) gc.onclick = () => {
+    const g = hoGapRows().filter(o => !o[7]);
+    hoDownloadCsv([['เลขพัสดุ', 'เลขออเดอร์ JST', 'ขนส่ง', 'ช่องทางการขาย', 'จัดส่งใน JST เมื่อ', 'สถานะออเดอร์', 'สถานะขนส่ง']].concat(g.map(o => o.slice(0, 7))),
+      `ไม่ได้สแกนส่งมอบ ${f.from === f.to ? f.from : f.from + ' ถึง ' + f.to}.csv`);
+  };
+  if (!HO.gap || HO.gap.key !== f.from + '|' + f.to) hoGapLoad(false, true);
   const csv = el.querySelector('[data-act=csv]');
   if (csv) csv.onclick = () => {
     const head = ['เลขพัสดุ', 'ขนส่ง', 'ช่องทางการขาย', 'สแกนเมื่อ', 'ผู้สแกน', 'คนรถที่เซ็นรับ', 'สถานะ', 'สถานะใน JST', 'เลขออเดอร์ JST', 'ต้องติดตาม', 'บันทึกการติดตาม'];
@@ -1981,6 +1995,53 @@ function renderHoReport(el){
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
     a.download = `ส่งมอบขนส่ง ${f.from === f.to ? f.from : f.from + ' ถึง ' + f.to}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   };
+}
+// ---- เทียบกับ JST: ออเดอร์ที่ JST จัดส่งแล้ว (ตามเวลาจัดส่งใน JST) แต่ไม่มีการสแกนส่งมอบ — ผู้ใช้สั่ง 3 พ.ย. ----
+// HO.gap = { key: 'from|to', loading, err, data: {orders: [[tracking, orderId, carrier, shop, sendTime, status, courierStatus, scanned]], complete, at} }
+const HO_GAP_DAYS = 7;
+async function hoGapLoad(force, auto){
+  const f = HO.f, key = f.from + '|' + f.to;
+  const days = Math.round((new Date(f.to + 'T00:00:00') - new Date(f.from + 'T00:00:00')) / 864e5) + 1;
+  if (days > HO_GAP_DAYS) { HO.gap = { key, err: `เทียบกับ JST ได้ครั้งละไม่เกิน ${HO_GAP_DAYS} วัน — เลือกช่วงวันที่ให้แคบลง`, tooLong: true }; renderHo(); return; }
+  if (!verAtLeast(S.version, '2026-11-03.7')) { HO.gap = { key, err: 'ต้องอัปเดต Code.gs ก่อน (เวอร์ชัน 2026-11-03.7 ขึ้นไป)' }; renderHo(); return; }
+  if (HO.gap && HO.gap.loading) return;
+  // opened by itself only for a single day (one JST pass ≈ 10–30 s); longer periods wait for the button
+  if (auto && days > 1) { HO.gap = { key }; renderHo(); return; }
+  HO.gap = { key, loading: true, data: HO.gap && HO.gap.key === key ? HO.gap.data : null }; renderHo();
+  try { const d = await run('hoUnscanned', S.pin, f.from, f.to, !!force); if (HO.gap.key === key) HO.gap = { key, data: d }; }
+  catch (e) { if (HO.gap.key === key) HO.gap = { key, err: errMsg(e), data: HO.gap.data }; }
+  renderHo();
+}
+// JST orders after the carrier / sales-channel filters of the report
+function hoGapRows(){
+  const f = HO.f, d = HO.gap && HO.gap.data;
+  return d ? d.orders.filter(o => (!f.carrier || (carrierKey(o[2]) || o[2]) === f.carrier) && (!f.shop || (o[3] || '(ไม่ระบุ)') === f.shop)) : [];
+}
+function hoGapHtml(){
+  const g = HO.gap, d = g && g.data;
+  const btn = `<button class="ghost" data-act="gap" ${g && g.loading ? 'disabled' : ''}>${g && g.loading ? 'กำลังเทียบกับ JST… (อาจใช้ 1–2 นาที)' : d ? '🔄 เทียบใหม่' : '🔍 เทียบกับ JST'}</button>`;
+  let body = '';
+  if (g && g.tooLong) body = `<p class="hint">${esc(g.err)}</p>`;
+  else if (!d) body = g && g.err ? `<p class="hint bad">${esc(g.err)}</p>` : `<p class="hint">${g && g.loading ? 'กำลังดึงออเดอร์ที่จัดส่งแล้วจาก JST…' : ''}</p>`;
+  else {
+    const all = hoGapRows(), miss = all.filter(o => !o[7]);
+    body = `<div class="ho-gapsum"><span>JST จัดส่ง <b>${num(all.length)}</b></span><span style="color:var(--ok)">สแกนส่งมอบแล้ว <b>${num(all.length - miss.length)}</b></span><span style="color:${miss.length ? 'var(--bad)' : 'var(--muted)'}">ไม่ได้สแกน <b>${num(miss.length)}</b></span></div>
+      ${d.complete ? '' : '<p class="hint bad">ดึงจาก JST ไม่ครบ (หมดเวลา) — ตัวเลขอาจน้อยกว่าจริง กด "เทียบใหม่" อีกครั้ง</p>'}
+      ${g.err ? `<p class="hint bad">${esc(g.err)}</p>` : ''}
+      ${miss.length ? `<div class="list">` + miss.slice(0, 200).map(o => `<div class="item"><div class="main">
+        <div class="t1"><b class="mono">${esc(o[0])}</b><span class="pill bad">ไม่ได้สแกน</span></div>
+        <div class="t2"><b>${esc(o[2] || 'ไม่ทราบขนส่ง')}</b> · ${esc(o[3] || 'ไม่ระบุช่องทาง')} · ออเดอร์ ${esc(o[1])} · จัดส่งใน JST ${esc(o[4])}${o[6] ? ' · ' + esc(o[6]) : ''}</div></div></div>`).join('') + `</div>`
+        + (miss.length > 200 ? `<p class="hint">แสดง 200 จาก ${num(miss.length)} — ดาวน์โหลด Excel เพื่อดูทั้งหมด</p>` : '')
+        + `<div class="toolbar" style="margin-top:8px"><button class="ghost" data-act="gapcsv">ดาวน์โหลดรายการที่ไม่ได้สแกน (.csv)</button></div>`
+        : `<p class="hint" style="color:var(--ok)">✓ ทุกออเดอร์ที่ JST จัดส่งในช่วงนี้ถูกสแกนส่งมอบแล้ว</p>`}
+      <p class="hint">นับออเดอร์ที่ JST บันทึกเวลาจัดส่งในวันที่เลือก (ไม่รวมออเดอร์ยกเลิก) · ข้อมูล ${hoTime(d.at)}</p>`;
+  }
+  return `<div class="card ho-gap"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><b>ออเดอร์ใน JST ที่ไม่ได้สแกนส่งมอบ</b>${btn}</div>${body}</div>`;
+}
+function hoDownloadCsv(lines, name){
+  const text = '\ufeff' + lines.map(r => r.map(v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+  a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 function hoBind(el){
   el.querySelectorAll('[data-act]').forEach(b => b.onclick = () => {
