@@ -279,16 +279,14 @@ canvas.ho-sign{width:100%;height:170px;border:1.5px dashed var(--line);border-ra
 .ho-proof img{width:100%;max-height:260px;object-fit:contain;border-radius:8px;border:1px solid var(--line);background:#fff}
 .ho-kpis{grid-template-columns:repeat(3,1fr)}
 .ho-kpis4{grid-template-columns:repeat(4,1fr)}
+.ho-kpis5{grid-template-columns:repeat(5,minmax(0,1fr))}
+@media (max-width:560px){.ho-kpis5{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:420px){.ho-kpis4{grid-template-columns:repeat(2,1fr)}}
 .ho-tabs{margin-bottom:12px;width:100%}
 .ho-tabs button{flex:1;font-size:15px;padding:9px}
 button.primary.ho-start{width:100%;font-size:20px;padding:18px}
 button.ho-start,#hoClose{width:100%;white-space:normal;line-height:1.35}
 .chip.unk{border-style:dashed;color:var(--warn)}
-.ho-gaprow{margin-top:12px}
-.ho-gaptile{cursor:pointer}
-.ho-gaptile .s{font-size:11px;color:var(--muted);margin-top:2px;overflow-wrap:anywhere}
-.ho-gapby button[aria-pressed=true]{border-color:var(--ok)}
 .ho-gapkpi{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:10px 0}
 .ho-gapkpi>div{background:var(--bg);border:1.5px solid var(--line);border-radius:var(--r);padding:8px 10px;min-width:0}
 .ho-gapkpi>div.alert{border-color:var(--bad)}
@@ -1902,7 +1900,7 @@ function renderHo(){
   if (hoPaint(el, html)) hoBind(el);
 }
 // ---- รายงาน: พัสดุที่ส่งมอบแล้ว กรองตาม ขนส่ง / ช่องทางขาย / สถานะ ----
-const HO_STATUS = [['', 'ทุกสถานะ'], ['open', 'ยังไม่ยืนยันว่าขนส่งรับ (ทั้งหมด)'], ['collected', 'ขนส่งรับแล้ว'], ['waiting', 'รอขนส่งรับ'], ['missing', 'ไม่พบออเดอร์ใน JST (แยกไว้)'], ['none', 'ยังไม่เช็ก'], ['issue', '⚠ ต้องติดตาม']];
+const HO_STATUS = [['', 'ทุกสถานะ'], ['open', 'ยังไม่ยืนยันว่าขนส่งรับ (ทั้งหมด)'], ['collected', 'ขนส่งรับแล้ว'], ['waiting', 'รอขนส่งรับ'], ['missing', 'ไม่พบออเดอร์ใน JST (แยกไว้)'], ['none', 'ยังไม่เช็ก'], ['issue', '⚠ ต้องติดตาม'], ['unscanned', '✕ ไม่ได้สแกนส่งมอบ (JST จัดส่งแล้ว)']];
 // open the report with filters already set (from a tile or a courier row on the home screen)
 function hoGoReport(o){
   Object.assign(HO.f, { days: 7, carrier: '', shop: '', status: '', q: '' }, o);
@@ -1945,8 +1943,10 @@ function renderHoReport(el){
   const today = hoYmd(Date.now()), minDay = hoYmd(Date.now() - (HO_REP_MAX_DAYS - 1) * 864e5);
   const all = R ? R.rows : [], rows = hoRepFiltered();
   const opts = (list, cur, allLabel) => `<option value="">${allLabel}</option>` + list.map(([v, t]) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(t)}</option>`).join('');
-  const carriers = [...new Map(all.map(p => [carrierF(p.carrier), p.carrier || 'ไม่ทราบขนส่ง'])).entries()];
-  const shops = [...new Set(all.map(p => p.shop || '(ไม่ระบุ)'))].sort().map(x => [x, x]);
+  const gapAll = HO.gap && HO.gap.data ? HO.gap.data.orders : [];
+  const carriers = [...new Map(all.map(p => [carrierF(p.carrier), p.carrier || 'ไม่ทราบขนส่ง']).concat(gapAll.map(o => [carrierF(o[2]), o[2] || 'ไม่ทราบขนส่ง']))).entries()];
+  const shops = [...new Set(all.map(p => p.shop || '(ไม่ระบุ)').concat(gapAll.map(o => o[3] || '(ไม่ระบุ)')))].sort().map(x => [x, x]);
+  const un = f.status === 'unscanned', gapMiss = hoGapMiss(), gapTile = hoGapTile(gapMiss);
   const stRows = (() => { const keep = f.status; f.status = ''; const r = hoRepFiltered(); f.status = keep; return r; })();
   const cnt = k => stRows.filter(p => k === 'issue' ? p.issue : hoRepStatus(p) === k).length;
   let html = hoTabs() + `<div class="card ho-filters">
@@ -1964,15 +1964,17 @@ function renderHoReport(el){
   if (HO.repLoading && !R) html += '<div class="empty">กำลังโหลดรายงาน…</div>';
   else if (R && R.err) html += `<div class="warnbox bad">${esc(R.err)}</div>`;
   else {
-    html += hoGapHtml();
-    html += `<div class="kpis ho-kpis4">
+    html += `<div class="kpis ho-kpis5">
       <div class="kpi" data-act="stat" data-stat="" role="button" tabindex="0" aria-pressed="${!f.status}"><div class="v">${num(stRows.length)}</div><div class="l">กล่องทั้งหมด</div></div>
       <div class="kpi" data-act="stat" data-stat="collected" role="button" tabindex="0" aria-pressed="${f.status === 'collected'}"><div class="v" style="color:var(--ok)">${num(cnt('collected'))}</div><div class="l">ขนส่งรับแล้ว</div></div>
       <div class="kpi" data-act="stat" data-stat="open" role="button" tabindex="0" aria-pressed="${f.status === 'open'}"><div class="v" style="color:var(--warn)">${num(stRows.length - cnt('collected'))}</div><div class="l">ยังไม่ยืนยัน</div></div>
-      <div class="kpi${cnt('issue') ? ' alert' : ''}" data-act="stat" data-stat="issue" role="button" tabindex="0" aria-pressed="${f.status === 'issue'}"><div class="v">${num(cnt('issue'))}</div><div class="l">⚠ ต้องติดตาม</div></div></div>
-      <div class="toolbar"><button class="ghost" data-act="csv" ${rows.length ? '' : 'disabled'}>ดาวน์โหลด Excel (.csv)</button>
-      <span class="hint">${HO.repLoading ? 'กำลังโหลด…' : R ? 'ข้อมูล ' + hoTime(R.at) : ''}</span></div>`;
-    html += rows.length ? `<div class="list">` + rows.slice(0, 300).map(p => `<button class="item ho-row" data-act="detail" data-id="${esc(p.ho)}"><div class="main">
+      <div class="kpi${cnt('issue') ? ' alert' : ''}" data-act="stat" data-stat="issue" role="button" tabindex="0" aria-pressed="${f.status === 'issue'}"><div class="v">${num(cnt('issue'))}</div><div class="l">⚠ ต้องติดตาม</div></div>
+      <div class="kpi${gapTile.alert ? ' alert' : ''}" data-act="stat" data-stat="unscanned" role="button" tabindex="0" aria-pressed="${un}"><div class="v" style="color:${gapTile.color}">${gapTile.v}</div><div class="l">✕ ไม่ได้สแกนส่งมอบ</div></div></div>
+      <div class="toolbar"><button class="ghost" data-act="csv" ${(un ? gapMiss.length : rows.length) ? '' : 'disabled'}>ดาวน์โหลด Excel (.csv)</button>
+      ${un ? `<button class="ghost" data-act="gap" ${HO.gap && HO.gap.loading ? 'disabled' : ''}>🔄 เทียบกับ JST ใหม่</button>` : ''}
+      <span class="hint">${un ? gapTile.note : HO.repLoading ? 'กำลังโหลด…' : R ? 'ข้อมูล ' + hoTime(R.at) : ''}</span></div>`;
+    if (un) html += hoGapList(gapMiss);
+    else html += rows.length ? `<div class="list">` + rows.slice(0, 300).map(p => `<button class="item ho-row" data-act="detail" data-id="${esc(p.ho)}"><div class="main">
         <div class="t1"><b class="mono">${esc(p.tracking)}</b>${hoJstPill({ jst: p.jst, flaggedAt: p.issue, done: false })}${p.scanCode ? `<span class="muted" style="font-size:12px">สแกนเลข ${esc(p.scanCode)}</span>` : ''}</div>
         <div class="t2"><b>${esc(p.carrier || 'ไม่ทราบขนส่ง')}</b> · ${esc(p.shop || 'ไม่ระบุช่องทาง')} · สแกน ${hoTime(p.at)} โดย ${esc(p.by)}${p.driver ? ' · คนรถเซ็นรับ ' + esc(p.driver) : ''}${p.orderId ? ' · ออเดอร์ ' + esc(p.orderId) : ''}</div>
         ${p.follow ? `<div class="t2">📝 ${esc(p.follow)}</div>` : ''}</div></button>`).join('') + `</div>`
@@ -1994,11 +1996,14 @@ function renderHoReport(el){
   const qi = el.querySelector('input[data-f=q]');
   qi.oninput = () => { f.q = qi.value; renderHo(); };
   if (focused) { const n = el.querySelector('input[data-f=q]'); n.focus(); n.setSelectionRange(pos, pos); }
-  const gt = el.querySelector('[data-act=gapopen]');
-  if (gt) { gt.onclick = () => hoGapDlg(); gt.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); hoGapDlg(); } }; }
-  if (!HO.gap || HO.gap.key !== f.from + '|' + f.to) hoGapLoad(false, true);
+  const gb = el.querySelector('[data-act=gap]');
+  if (gb) gb.onclick = () => hoGapLoad(true);
+  // the JST comparison: by itself for one day; for longer periods when the tile is chosen
+  if (!HO.gap || HO.gap.key !== hoGapKey()) hoGapLoad(false, !un);
   const csv = el.querySelector('[data-act=csv]');
-  if (csv) csv.onclick = () => {
+  if (csv && un) csv.onclick = () => hoDownloadCsv([['เลขพัสดุ', 'เลขออเดอร์ JST', 'ขนส่ง', 'ช่องทางการขาย', 'จัดส่งใน JST เมื่อ', 'สถานะออเดอร์', 'สถานะขนส่ง']].concat(gapMiss.map(o => o.slice(0, 7))),
+    `ไม่ได้สแกนส่งมอบ ${f.from === f.to ? f.from : f.from + ' ถึง ' + f.to}.csv`);
+  else if (csv) csv.onclick = () => {
     const head = ['เลขพัสดุ', 'ขนส่ง', 'ช่องทางการขาย', 'สแกนเมื่อ', 'ผู้สแกน', 'คนรถที่เซ็นรับ', 'สถานะ', 'สถานะใน JST', 'เลขออเดอร์ JST', 'ต้องติดตาม', 'บันทึกการติดตาม'];
     const label = Object.fromEntries(HO_STATUS);
     const lines = [head].concat(rows.map(p => [p.tracking, p.carrier, p.shop, hoTime(p.at), p.by, p.driver, label[hoRepStatus(p)] || '', p.jstText, p.orderId, p.issue ? 'ใช่' : '', p.follow]));
@@ -2009,75 +2014,51 @@ function renderHoReport(el){
 }
 // ---- เทียบกับ JST: ออเดอร์ที่ JST จัดส่งแล้ว (ตามเวลาจัดส่งใน JST) แต่ไม่มีการสแกนส่งมอบ — ผู้ใช้สั่ง 3 พ.ย. ----
 // HO.gap = { key: 'from|to', loading, err, data: {orders: [[tracking, orderId, carrier, shop, sendTime, status, courierStatus, scanned]], complete, at} }
-const HO_GAP_DAYS = 7;
+const HO_GAP_DAYS = 7, HO_GAP_START = '2026-11-03'; // first day the handover scan was used — nothing is compared before it
+// the period actually compared: the report period, not before HO_GAP_START
+function hoGapRange(){ const f = HO.f; return { from: f.from < HO_GAP_START ? HO_GAP_START : f.from, to: f.to }; }
+function hoGapKey(){ const r = hoGapRange(); return r.from + '|' + r.to; }
 async function hoGapLoad(force, auto){
-  const f = HO.f, key = f.from + '|' + f.to;
-  const days = Math.round((new Date(f.to + 'T00:00:00') - new Date(f.from + 'T00:00:00')) / 864e5) + 1;
+  const r = hoGapRange(), key = r.from + '|' + r.to;
+  if (r.to < r.from) { HO.gap = { key, before: true }; renderHo(); return; }
+  const days = Math.round((new Date(r.to + 'T00:00:00') - new Date(r.from + 'T00:00:00')) / 864e5) + 1;
   if (days > HO_GAP_DAYS) { HO.gap = { key, err: `เทียบกับ JST ได้ครั้งละไม่เกิน ${HO_GAP_DAYS} วัน — เลือกช่วงวันที่ให้แคบลง`, tooLong: true }; renderHo(); return; }
   if (!verAtLeast(S.version, '2026-11-03.7')) { HO.gap = { key, err: 'ต้องอัปเดต Code.gs ก่อน (เวอร์ชัน 2026-11-03.7 ขึ้นไป)' }; renderHo(); return; }
   if (HO.gap && HO.gap.loading) return;
-  // opened by itself only for a single day (one JST pass ≈ 10–30 s); longer periods wait for the button
+  // by itself only for a single day (one JST pass); longer periods wait until the tile is chosen
   if (auto && days > 1) { HO.gap = { key }; renderHo(); return; }
-  HO.gap = { key, loading: true, data: HO.gap && HO.gap.key === key ? HO.gap.data : null }; renderHo(); hoGapPaint();
-  try { const d = await run('hoUnscanned', S.pin, f.from, f.to, !!force); if (HO.gap.key === key) HO.gap = { key, data: d }; }
+  HO.gap = { key, loading: true, data: HO.gap && HO.gap.key === key ? HO.gap.data : null }; renderHo();
+  try { const d = await run('hoUnscanned', S.pin, r.from, r.to, !!force); if (HO.gap.key === key) HO.gap = { key, data: d }; }
   catch (e) { if (HO.gap.key === key) HO.gap = { key, err: errMsg(e), data: HO.gap.data }; }
-  renderHo(); hoGapPaint();
+  renderHo();
 }
-// JST orders after the carrier / sales-channel filters of the report
+// JST orders after the courier / sales-channel / search filters of the report
 function hoGapRows(){
-  const f = HO.f, d = HO.gap && HO.gap.data;
-  return d ? d.orders.filter(o => (!f.carrier || carrierF(o[2]) === f.carrier) && (!f.shop || (o[3] || '(ไม่ระบุ)') === f.shop)) : [];
+  const f = HO.f, d = HO.gap && HO.gap.key === hoGapKey() && HO.gap.data, q = (f.q || '').trim().toUpperCase();
+  return d ? d.orders.filter(o => (!f.carrier || carrierF(o[2]) === f.carrier) && (!f.shop || (o[3] || '(ไม่ระบุ)') === f.shop)
+    && (!q || String(o[0]).includes(q) || String(o[1]).includes(q))) : [];
 }
-// one tile, the same size as the tiles below (ผู้ใช้สั่ง 3 พ.ย.) — tap it for the list of orders that were not scanned
-function hoGapHtml(){
-  const g = HO.gap, d = g && g.data, all = d ? hoGapRows() : [], miss = all.filter(o => !o[7]).length;
-  const [v, sub, cls] = g && g.tooLong ? ['—', 'เทียบได้ไม่เกิน ' + HO_GAP_DAYS + ' วัน', '']
-    : g && g.loading && !d ? ['…', 'กำลังเทียบกับ JST', '']
-    : !d ? [g && g.err ? '!' : '?', g && g.err ? 'เทียบไม่สำเร็จ — กดดู' : 'กดเพื่อเทียบกับ JST', g && g.err ? ' alert' : '']
-    : [num(miss), 'จาก JST จัดส่ง ' + num(all.length) + (g.loading ? ' · กำลังเทียบใหม่…' : ''), miss ? ' alert' : ''];
-  return `<div class="kpis ho-kpis4 ho-gaprow"><div class="kpi ho-gaptile${cls}" data-act="gapopen" role="button" tabindex="0">
-      <div class="v" style="color:${d && !miss ? 'var(--ok)' : 'var(--bad)'}">${v}</div><div class="l">ไม่ได้สแกนส่งมอบ ›</div><div class="s">${esc(sub)}</div></div></div>
-    <h2 class="ho-sub">กล่องที่สแกนส่งมอบ</h2>`;
+const hoGapMiss = () => hoGapRows().filter(o => !o[7]);
+// the tile: same look as the others (ผู้ใช้สั่ง 3 พ.ย.)
+function hoGapTile(miss){
+  const g = HO.gap && HO.gap.key === hoGapKey() ? HO.gap : null, d = g && g.data;
+  const since = 'นับตั้งแต่ ' + hoTime(new Date(HO_GAP_START + 'T00:00:00').getTime()).replace(/ \d\d:\d\d$/, '') + ' (วันแรกที่ใช้ระบบ)';
+  if (g && g.before) return { v: '—', color: 'var(--muted)', note: 'ช่วงนี้อยู่ก่อนวันแรกที่ใช้ระบบส่งมอบ — ไม่มีการเทียบ' };
+  if (g && g.tooLong) return { v: '—', color: 'var(--muted)', note: g.err };
+  if (g && g.loading && !d) return { v: '…', color: 'var(--muted)', note: 'กำลังเทียบกับ JST… (อาจใช้ 1–2 นาที)' };
+  if (!d) return g && g.err ? { v: '!', color: 'var(--bad)', alert: true, note: g.err } : { v: '?', color: 'var(--muted)', note: 'กดกล่อง "ไม่ได้สแกนส่งมอบ" เพื่อเทียบกับ JST' };
+  return { v: num(miss.length), color: miss.length ? 'var(--bad)' : 'var(--ok)', alert: miss.length > 0,
+    note: `JST จัดส่ง ${num(hoGapRows().length)} · ไม่ได้สแกน ${num(miss.length)}${d.complete ? '' : ' · ดึงจาก JST ไม่ครบ (หมดเวลา) กดเทียบใหม่'}${g.loading ? ' · กำลังเทียบใหม่…' : ''}${g.err ? ' · ' + g.err : ''} · ${HO.f.from < HO_GAP_START ? since + ' · ' : ''}ข้อมูล ${hoTime(d.at)}` };
 }
-// popup: totals, by courier (tap = only that courier), the missing orders, CSV, compare again
-function hoGapDlg(){
-  if (HO.gap && HO.gap.tooLong) { toast(HO.gap.err); return; }
-  const md = openModal(`<div class="modal-head">ออเดอร์ใน JST ที่ไม่ได้สแกนส่งมอบ</div><div class="modal-body" id="hoGapBody"></div>
-    <div class="modal-foot"><button class="ghost" data-gap-again>🔄 เทียบใหม่</button><span style="flex:1"></span><button class="ghost" data-gap-csv>ดาวน์โหลด (.csv)</button><button class="ghost" data-x>ปิด</button></div>`, true);
-  HO.gapMd = md; HO.gapCar = '';
-  md.el.querySelector('[data-x]').onclick = md.close;
-  md.el.querySelector('[data-gap-again]').onclick = () => hoGapLoad(true);
-  md.el.querySelector('[data-gap-csv]').onclick = () => {
-    const f = HO.f, g = hoGapRows().filter(o => !o[7] && (!HO.gapCar || carrierF(o[2]) === HO.gapCar));
-    if (!g.length) { toast('ไม่มีรายการที่ไม่ได้สแกน'); return; }
-    hoDownloadCsv([['เลขพัสดุ', 'เลขออเดอร์ JST', 'ขนส่ง', 'ช่องทางการขาย', 'จัดส่งใน JST เมื่อ', 'สถานะออเดอร์', 'สถานะขนส่ง']].concat(g.map(o => o.slice(0, 7))),
-      `ไม่ได้สแกนส่งมอบ ${f.from === f.to ? f.from : f.from + ' ถึง ' + f.to}.csv`);
-  };
-  hoGapPaint();
-  if (!HO.gap || (!HO.gap.data && !HO.gap.loading)) hoGapLoad(true);
-}
-function hoGapPaint(){
-  const md = HO.gapMd; if (!md || !md.el.isConnected) { HO.gapMd = null; return; }
-  const g = HO.gap, d = g && g.data, body = md.el.querySelector('#hoGapBody');
-  md.el.querySelector('[data-gap-again]').disabled = !!(g && g.loading);
-  if (!d) { body.innerHTML = g && g.err ? `<div class="warnbox bad">${esc(g.err)}</div>` : `<div class="empty">กำลังดึงออเดอร์ที่จัดส่งแล้วจาก JST… (อาจใช้ 1–2 นาที)</div>`; return; }
-  const all = hoGapRows(), miss = all.filter(o => !o[7]), by = new Map();
-  all.forEach(o => { const k = carrierF(o[2]), x = by.get(k) || { k, name: o[2] || 'ไม่ทราบขนส่ง', n: 0, miss: 0 }; x.n++; if (!o[7]) x.miss++; by.set(k, x); });
-  const groups = [...by.values()].sort((x, y) => y.miss - x.miss || y.n - x.n), sel = HO.gapCar, list = miss.filter(o => !sel || carrierF(o[2]) === sel);
-  body.innerHTML = `<div class="ho-gapkpi">
-      <div><div class="v">${num(all.length)}</div><div class="l">JST จัดส่ง</div></div>
-      <div><div class="v" style="color:var(--ok)">${num(all.length - miss.length)}</div><div class="l">สแกนส่งมอบแล้ว</div></div>
-      <div class="${miss.length ? 'alert' : ''}"><div class="v" style="color:${miss.length ? 'var(--bad)' : 'var(--muted)'}">${num(miss.length)}</div><div class="l">ไม่ได้สแกน</div></div></div>
-    ${d.complete ? '' : '<p class="hint bad">ดึงจาก JST ไม่ครบ (หมดเวลา) — ตัวเลขอาจน้อยกว่าจริง กด "เทียบใหม่" อีกครั้ง</p>'}
-    ${g.loading ? '<p class="hint">กำลังเทียบใหม่…</p>' : ''}${g.err ? `<p class="hint bad">${esc(g.err)}</p>` : ''}
-    ${groups.length > 1 ? `<div class="ho-gapby">` + groups.map(x => `<button type="button" data-k="${esc(x.k)}" aria-pressed="${sel === x.k}"><span>${esc(x.name)}</span><span class="muted">${num(x.n)}</span><b style="color:${x.miss ? 'var(--bad)' : 'var(--ok)'}">${x.miss ? '✕ ขาด ' + num(x.miss) : '✓ ครบ'}</b></button>`).join('') + `</div>` : ''}
-    ${list.length ? `<h3 class="ho-sub" style="font-size:15px">ออเดอร์ที่ขาด${sel ? ' · ' + esc((by.get(sel) || {}).name || '') : ''} (${num(list.length)})</h3><div class="ho-gaplist">` + list.slice(0, 300).map(o => `<div class="ho-gapitem">
-        <div class="t1"><b class="mono">${esc(o[0])}</b><span class="muted">${esc(o[4].slice(5))}</span></div>
-        <div class="t2"><b>${esc(o[2] || 'ไม่ทราบขนส่ง')}</b> · ${esc(o[3] || 'ไม่ระบุช่องทาง')} · ออเดอร์ ${esc(o[1])}${o[6] ? ' · ' + esc(o[6]) : ''}</div></div>`).join('') + `</div>`
-      + (list.length > 300 ? `<p class="hint">แสดง 300 จาก ${num(list.length)} — ดาวน์โหลด .csv เพื่อดูทั้งหมด</p>` : '')
-      : `<p class="hint" style="color:var(--ok)">✓ ${sel ? 'ขนส่งนี้' : 'ทุกออเดอร์ที่ JST จัดส่งในช่วงนี้'}ถูกสแกนส่งมอบแล้ว</p>`}
-    <p class="hint" style="margin-top:8px">นับออเดอร์ในแท็บ JST "จัดส่งแล้ว" ที่เวลาจัดส่งอยู่ในวันที่เลือก · ข้อมูล ${hoTime(d.at)}${d.ms ? ` · ดึง ${num(d.pages || 0)} หน้า ${Math.round(d.ms / 1000)} วิ` : ''}</p>`;
-  body.querySelectorAll('.ho-gapby [data-k]').forEach(b => b.onclick = () => { HO.gapCar = HO.gapCar === b.dataset.k ? '' : b.dataset.k; hoGapPaint(); });
+// the list below the tiles when "ไม่ได้สแกนส่งมอบ" is chosen — same rows as the scanned boxes
+function hoGapList(miss){
+  const g = HO.gap && HO.gap.key === hoGapKey() ? HO.gap : null;
+  if (!g || !g.data) return `<div class="empty">${esc(hoGapTile(miss).note)}</div>`;
+  if (!miss.length) return `<div class="empty" style="color:var(--ok)">✓ ทุกออเดอร์ที่ JST จัดส่ง (ตามตัวกรองนี้) ถูกสแกนส่งมอบแล้ว</div>`;
+  return `<div class="list">` + miss.slice(0, 300).map(o => `<div class="item ho-row"><div class="main">
+      <div class="t1"><b class="mono">${esc(o[0])}</b><span class="pill bad">✕ ไม่ได้สแกน</span></div>
+      <div class="t2"><b>${esc(o[2] || 'ไม่ทราบขนส่ง')}</b> · ${esc(o[3] || 'ไม่ระบุช่องทาง')} · จัดส่งใน JST ${esc(o[4].slice(5))} · ออเดอร์ ${esc(o[1])}${o[6] ? ' · ' + esc(o[6]) : ''}</div></div></div>`).join('') + `</div>`
+    + (miss.length > 300 ? `<p class="hint" style="margin-top:8px">แสดง 300 จาก ${num(miss.length)} — กรองให้แคบลง หรือดาวน์โหลด Excel เพื่อดูทั้งหมด</p>` : '');
 }
 function hoDownloadCsv(lines, name){
   const text = '\ufeff' + lines.map(r => r.map(v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`).join(',')).join('\r\n');
