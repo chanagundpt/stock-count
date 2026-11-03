@@ -877,7 +877,38 @@ async function decodeCanvas(cv, ctx){
       const ok = r.find(x => x.isValid && x.text); if (ok) return ok.text;
     } catch {}
   }
+  // labels JST prints itself (e.g. J&T for the Blogger shop) put a solid black logo box right next to the barcode —
+  // no white margin, so neither decoder finds the start of the code. Paint long black runs white and try once more (Code 128 only).
+  if (label && unblockBars(ctx, cv.width, cv.height)) {
+    if (d) { try { const r = await d.detect(cv); const b = r.find(x => x.format === 'code_128' && x.rawValue); if (b) return b.rawValue; } catch {} }
+    if (window.ZXingWASM) {
+      try {
+        const r = await ZXingWASM.readBarcodes(ctx.getImageData(0, 0, cv.width, cv.height), { formats: ['Code128'], tryHarder: true, maxNumberOfSymbols: 1 });
+        const ok = r.find(x => x.isValid && x.text); if (ok) return ok.text;
+      } catch {}
+    }
+  }
   return null;
+}
+// per pixel row: a dark run 6× longer than the row's typical bar (and ≥3% of the width) is a logo/box, not a bar → white (+1 px for the blurred edge)
+function unblockBars(ctx, w, h){
+  const id = ctx.getImageData(0, 0, w, h), d = id.data, g = new Uint8Array(w);
+  let hit = 0;
+  for (let y = 0; y < h; y++) {
+    const o = y * w * 4; let mn = 255, mx = 0;
+    for (let i = 0; i < w; i++) { const v = (d[o + i * 4] * 3 + d[o + i * 4 + 1] * 6 + d[o + i * 4 + 2]) / 10; g[i] = v; if (v < mn) mn = v; if (v > mx) mx = v; }
+    if (mx - mn < 60) continue;
+    const t = (mn + mx) / 2, runs = [];
+    for (let i = 0; i < w;) { if (g[i] < t) { let j = i; while (j < w && g[j] < t) j++; runs.push([i, j - i]); i = j; } else i++; }
+    if (runs.length < 8) continue;
+    const lim = Math.max(runs.map(r => r[1]).sort((a, b) => a - b)[runs.length >> 1] * 6, w * .03);
+    for (const [s, n] of runs) if (n > lim) {
+      hit++;
+      for (let i = Math.max(0, s - 1), e = Math.min(w, s + n + 1); i < e; i++) { const p = o + i * 4; d[p] = d[p + 1] = d[p + 2] = 255; }
+    }
+  }
+  if (hit) ctx.putImageData(id, 0, 0);
+  return hit;
 }
 const scanStatus = t => { $('#scanStatus').textContent = t; };
 let stream = null, scanning = false, track = null, zoomSteps = [], zoomIdx = 0, torchOn = false, audio = null;
