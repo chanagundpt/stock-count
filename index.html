@@ -2120,7 +2120,7 @@ function hoAdd(raw, fromCam){
   return true;
 }
 // what the JST lookup at scan time says about this parcel (null = nothing to warn about, or JST not searched)
-const CARRIER_KEYS = [['flash', /flash/i], ['kerry', /kerry|kex/i], ['jt', /j\s*&\s*t|jnt/i], ['spx', /spx|shopee/i], ['lex', /lazada|lex\b/i],
+const CARRIER_KEYS = [['flash', /flash/i], ['kerry', /kerry|kex/i], ['jtvip', /(j\s*&\s*t|jnt).*vip/i], ['jt', /j\s*&\s*t|jnt/i], ['spx', /spx|shopee/i], ['lex', /lazada|lex\b/i],
   ['post', /ไปรษณีย์|thailand\s*post|thai\s*post|ems/i], ['ninja', /ninja/i], ['dhl', /dhl/i], ['best', /best/i]];
 const carrierKey = n => { const k = CARRIER_KEYS.find(([, re]) => re.test(n || '')); return k ? k[0] : ''; };
 function hoJstWarn(j, carrier){
