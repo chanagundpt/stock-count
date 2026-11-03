@@ -2137,7 +2137,9 @@ async function hoPump(){
         else if (/^HO_BLOCKED/.test(m)) {
           const [tr, why] = m.replace(/^HO_BLOCKED:\s*/, '').split('|');
           drop(); HO.rejected.set(p.send || p.tracking, Date.now());
-          hoFeedback('bad', 'ห้ามส่งมอบ — แยกกล่องนี้ออก', (why || '') + ' · ' + tr + ' · ไม่ได้บันทึก', 'ห้ามส่ง แยกกล่องนี้ออก');
+          // order still "รอจัดส่ง" in JST (not checked by the packing team) → send the box back to be checked
+          if (/^ยังไม่ได้ตรวจสอบออเดอร์/.test(why || '')) hoFeedback('bad', 'ยังไม่ได้ตรวจสอบออเดอร์', 'ส่งกล่องกลับให้พนักงานตรวจสอบออเดอร์ก่อน · ' + tr + ' · ไม่ได้บันทึก', 'ยังไม่ได้ตรวจสอบออเดอร์');
+          else hoFeedback('bad', 'ห้ามส่งมอบ — แยกกล่องนี้ออก', (why || '') + ' · ' + tr + ' · ไม่ได้บันทึก', 'ห้ามส่ง แยกกล่องนี้ออก');
         }
         else if (/^HO_JST_DOWN/.test(m)) { drop(); hoFeedback('warn', 'เช็ก JST ไม่ได้ — สแกนใหม่อีกครั้ง', p.tracking + ' · ไม่ได้บันทึก', 'สแกนใหม่'); }
         else if (/สแกนไปแล้ว/.test(m)) { drop(); hoFeedback('dup', 'สแกนซ้ำ', m.replace(/^\S+\s*/, ''), 'สแกนซ้ำ'); }
