@@ -2062,7 +2062,7 @@ function hoGapHtml(){
           + (miss.length > 300 ? `<p class="hint">แสดง 300 จาก ${num(miss.length)} — ดาวน์โหลด Excel เพื่อดูทั้งหมด</p>` : '') + `</div>`
           + `<button class="ghost" data-act="gapcsv" style="margin-top:8px">ดาวน์โหลดรายการที่ไม่ได้สแกน (.csv)</button>` : '')
         : `<p class="hint" style="color:var(--ok)">✓ ทุกออเดอร์ที่ JST จัดส่งในช่วงนี้ถูกสแกนส่งมอบแล้ว</p>`}
-      <p class="hint" style="margin-top:8px">นับออเดอร์ที่ JST บันทึกเวลาจัดส่งในวันที่เลือก (ไม่รวมออเดอร์ยกเลิก) · ข้อมูล ${hoTime(d.at)}</p>`;
+      <p class="hint" style="margin-top:8px">นับออเดอร์ในแท็บ JST "จัดส่งแล้ว" ที่เวลาจัดส่งอยู่ในวันที่เลือก · ข้อมูล ${hoTime(d.at)}</p>`;
   }
   return `<section class="card ho-gap"><div class="ho-gaphead"><div><b>ออเดอร์ใน JST ที่ไม่ได้สแกนส่งมอบ</b><div class="hint">เทียบออเดอร์ที่ JST จัดส่งแล้ว กับกล่องที่สแกนในแอป</div></div>${btn}</div>${body}</section>
     <h2 class="ho-sub">กล่องที่สแกนส่งมอบ</h2>`;
