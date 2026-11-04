@@ -263,6 +263,7 @@ button.item.ho-row:focus-visible{outline:3px solid var(--accent);outline-offset:
 .ho-big .mono{font-size:44px;color:var(--accent)}
 label.ghost.ho-photo{display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 12px;font-size:15px;text-align:center;white-space:normal;border:1.5px dashed var(--accent);color:var(--accent);border-radius:var(--r)}
 .ho-photo img{max-width:100%;max-height:220px;border-radius:8px}
+.ho-photobtns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .ho-thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px}
 .ho-thumbs:empty{display:none}
 .ho-thumb{position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;background:var(--bg)}
@@ -2327,8 +2328,10 @@ function hoCloseDlg(){
       <div class="field"><label>เบอร์โทรคนรถ</label><input type="text" id="hoPhone" inputmode="tel" autocomplete="off"></div></div>
     <div class="field"><label>รูปถ่าย: กองพัสดุกับคนรถ/รถขนส่ง *</label>
       <div class="ho-thumbs" id="hoThumbs"></div>
-      <label class="ghost ho-photo" for="hoPhotoIn"><span id="hoPhotoTxt">📷 ถ่ายรูป</span></label>
-      <input type="file" id="hoPhotoIn" accept="image/*" capture="environment" hidden></div>
+      <div class="ho-photobtns"><label class="ghost ho-photo" for="hoPhotoIn"><span id="hoPhotoTxt">📷 ถ่ายรูป</span></label>
+      <label class="ghost ho-photo" for="hoPhotoUp"><span id="hoPhotoUpTxt">🖼 เลือกรูปจากเครื่อง</span></label></div>
+      <input type="file" id="hoPhotoIn" accept="image/*" capture="environment" hidden>
+      <input type="file" id="hoPhotoUp" accept="image/*" multiple hidden></div>
     <div class="field"><label>ลายเซ็นคนรถ * <button type="button" class="linkbtn" id="hoSignClr">ล้าง</button></label>
       <canvas id="hoSign" class="ho-sign"></canvas><p class="hint" id="hoSignNote"></p></div>
     <div class="field"><label>หมายเหตุ</label><input type="text" id="hoNote" autocomplete="off"></div>
@@ -2384,15 +2387,20 @@ function hoCloseDlg(){
   const drawThumbs = () => {
     q('#hoThumbs').innerHTML = photos.map((p, i) => `<div class="ho-thumb"><img src="${p}" alt="รูปที่ ${i + 1}"><button type="button" data-rm="${i}" aria-label="ลบรูปที่ ${i + 1}">✕</button></div>`).join('');
     q('#hoThumbs').querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { photos.splice(Number(b.dataset.rm), 1); drawThumbs(); });
-    q('#hoPhotoTxt').textContent = photos.length >= MAX_PHOTOS ? `ครบ ${MAX_PHOTOS} รูปแล้ว` : photos.length ? `📷 ถ่ายเพิ่ม (${photos.length} รูป)` : '📷 ถ่ายรูป';
+    const full = photos.length >= MAX_PHOTOS;
+    q('#hoPhotoTxt').textContent = full ? `ครบ ${MAX_PHOTOS} รูปแล้ว` : photos.length ? `📷 ถ่ายเพิ่ม (${photos.length} รูป)` : '📷 ถ่ายรูป';
+    q('#hoPhotoUpTxt').textContent = full ? `ครบ ${MAX_PHOTOS} รูปแล้ว` : '🖼 เลือกรูปจากเครื่อง';
   };
-  q('#hoPhotoIn').onchange = async e => {
+  // ผู้ใช้สั่ง 4 พ.ย.: take a photo now, or pick photos already on the phone (several at once) — both go through the same check
+  const addPhotos = async e => {
     const files = [...(e.target.files || [])].slice(0, MAX_PHOTOS - photos.length); e.target.value = '';
     if (!files.length) return;
-    q('#hoPhotoTxt').textContent = 'กำลังย่อรูป…';
-    for (const f of files) { try { photos.push(await shrinkImage(f, 1280, .72)); } catch { toast('รูปนี้อ่านไม่ได้ (ไฟล์เสีย) — ถ่ายใหม่อีกครั้ง'); } }
+    q('#hoPhotoTxt').textContent = q('#hoPhotoUpTxt').textContent = 'กำลังย่อรูป…';
+    for (const f of files) { try { photos.push(await shrinkImage(f, 1280, .72)); } catch { toast('รูปนี้อ่านไม่ได้ (ไฟล์เสีย) — เลือกรูปอื่นหรือถ่ายใหม่'); } }
     drawThumbs();
   };
+  q('#hoPhotoIn').onchange = addPhotos;
+  q('#hoPhotoUp').onchange = addPhotos;
   const pad = signPad(q('#hoSign'));
   q('#hoSignClr').onclick = pad.clear;
   q('[data-x]').onclick = md.close;
