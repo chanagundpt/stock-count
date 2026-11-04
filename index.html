@@ -1212,10 +1212,13 @@ function renderSummary(){
           h('div', { class: 't2', text: `${g.n} ครั้ง` + (g.locs.size ? ' · ' + [...g.locs].join(', ') : '') + (g.sku ? '' : ' · ยังไม่มี SKU ในฐานข้อมูล') })),
         h('div', { style: 'text-align:right' }, h('div', { class: 'qty', text: num(g.total) }), jqLine(g))),
       isOpen ? h('div', { class: 'detail' }, h('div', { class: 'tbl' }, h('table', {},
-        h('thead', {}, h('tr', {}, ['ตำแหน่ง', 'EXP', 'ล็อต', 'จำนวน', 'คนนับ', 'เวลา'].map(t => h('th', { text: t })))),
+        h('thead', {}, h('tr', {}, ['ตำแหน่ง', 'EXP', 'ล็อต', 'จำนวน', 'คนนับ', 'เวลา', 'JST ตอนนับ'].map(t => h('th', { text: t })))),
         h('tbody', {}, g.entries.slice().sort((a, b) => a.at - b.at).map(c => h('tr', { class: c.void ? 'void' : '' },
           h('td', { class: 'mono', text: c.loc || '–' }), h('td', { text: fmtExp(c.exp) }), h('td', { class: 'mono', text: c.lot || '–' }),
-          h('td', { class: 'n', text: num(c.qty) }), h('td', { text: c.by || '–' }), h('td', { text: fmtTime(c.at) + (c.void ? ' (ยกเลิก)' : '') }))))))) : null));
+          h('td', { class: 'n', text: num(c.qty) }), h('td', { text: c.by || '–' }), h('td', { text: fmtTime(c.at) + (c.void ? ' (ยกเลิก)' : '') }),
+          // JST "สินค้าคงคลัง" saved with this count (and when it was read, if not at the same moment)
+          h('td', { class: 'n', text: typeof c.jq === 'number' ? num(c.jq) + (c.jqAt && Math.abs(c.jqAt - c.at) > 10 * 60e3 ? ' (ดึง ' + fmtTime(c.jqAt) + ')' : '')
+            : c.jq === null ? 'ไม่พบใน JST' : 'ไม่ได้เก็บ' }))))))) : null));
   }
   box.append(wrap);
   loadJq(all.map(g => g.sku));
