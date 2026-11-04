@@ -1221,7 +1221,6 @@ function renderSummary(){
             : c.jq === null ? 'ไม่พบใน JST' : 'ไม่ได้เก็บ' }))))))) : null));
   }
   box.append(wrap);
-  loadJq(all.filter(g => { const L = lastCount(g); return !L || L.jq === undefined; }).map(g => g.sku));
 }
 // JST "สินค้าคงคลัง" (same number as the count page) beside each counted total; fetched in one call, kept 2 min
 const JQ = { qty: new Map(), at: new Map(), busy: false, off: false, err: '' };
@@ -1232,10 +1231,8 @@ function jqLine(g){
   const L = lastCount(g);
   if (L && typeof L.jq === 'number') return h('div', { class: 'jq', title: 'สต๊อก JST (สินค้าคงคลัง) ตอนนับครั้งสุดท้าย ' + fmtTime(L.jqAt || L.at), text: 'JST ' + num(L.jq) });
   if (L && L.jq === null) return h('div', { class: 'jq', text: 'ไม่พบใน JST' });
-  // counted before the JST number was saved with each count → JST now, labelled so
-  if (JQ.off) return null;
-  const t = JQ.qty.has(g.sku) ? 'JST ตอนนี้ ' + num(JQ.qty.get(g.sku)) : JQ.at.has(g.sku) ? (JQ.err ? 'JST –' : 'ไม่พบใน JST') : 'JST …';
-  return h('div', { class: 'jq', title: 'นับก่อนระบบเก็บยอด JST ตอนนับ — แสดงสต๊อก JST ตอนนี้ (สินค้าคงคลัง)', text: t });
+  // never the live JST stock here (user's rule): a count saved before JST was recorded with it has no number to compare with
+  return h('div', { class: 'jq', title: 'นับก่อนระบบเก็บยอด JST ตอนนับ', text: 'JST ตอนนับ –' });
 }
 async function loadJq(skus){
   if (JQ.busy || JQ.off || !S.pin) return;
