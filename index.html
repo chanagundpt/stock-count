@@ -280,7 +280,7 @@ canvas.ho-sign{width:100%;height:170px;border:1.5px dashed var(--line);border-ra
 .ho-proof img{width:100%;max-height:260px;object-fit:contain;border-radius:8px;border:1px solid var(--line);background:#fff}
 .ho-kpis{grid-template-columns:repeat(3,1fr)}
 .ho-kpis4{grid-template-columns:repeat(4,1fr)}
-.ho-kpis5{grid-template-columns:repeat(5,minmax(0,1fr))}
+.ho-kpis5{grid-template-columns:repeat(6,minmax(0,1fr))}
 @media (max-width:560px){.ho-kpis5{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:420px){.ho-kpis4{grid-template-columns:repeat(2,1fr)}}
 .ho-tabs{margin-bottom:12px;width:100%}
@@ -1908,7 +1908,7 @@ function renderHo(){
   if (hoPaint(el, html)) hoBind(el);
 }
 // ---- รายงาน: พัสดุที่ส่งมอบแล้ว กรองตาม ขนส่ง / ช่องทางขาย / สถานะ ----
-const HO_STATUS = [['', 'ทุกสถานะ'], ['open', 'ยังไม่ยืนยันว่าขนส่งรับ (ทั้งหมด)'], ['collected', 'ขนส่งรับแล้ว'], ['waiting', 'รอขนส่งรับ'], ['missing', 'ไม่พบออเดอร์ใน JST (แยกไว้)'], ['none', 'ยังไม่เช็ก'], ['issue', '⚠ ต้องติดตาม'], ['unscanned', '✕ ไม่ได้สแกนส่งมอบ (JST จัดส่งแล้ว)']];
+const HO_STATUS = [['', 'ทุกสถานะ'], ['open', 'ยังไม่ยืนยันว่าขนส่งรับ (ทั้งหมด)'], ['collected', 'ขนส่งรับแล้ว'], ['waiting', 'รอขนส่งรับ'], ['missing', 'ไม่พบออเดอร์ใน JST (แยกไว้)'], ['none', 'ยังไม่เช็ก'], ['issue', '⚠ ต้องติดตาม'], ['unscanned', '✕ ไม่ได้สแกนส่งมอบ (JST จัดส่งแล้ว)'], ['rejected', '⛔ สแกนไม่ผ่าน']];
 // open the report with filters already set (from a tile or a courier row on the home screen)
 function hoGoReport(o){
   Object.assign(HO.f, { days: 7, carrier: '', shop: '', status: '', q: '' }, o);
@@ -1931,7 +1931,7 @@ async function hoReportLoad(){
   try {
     if (!HO.f.from) hoSetDays(HO.f.days || 7);
     const need = hoDaysBack(), r = await run('hoReport', S.pin, need);
-    HO.rep = { days: need, at: Date.now(), rows: r.rows.map(x => Object.fromEntries(r.cols.map((c, i) => [c, x[i]]))) };
+    HO.rep = { days: need, at: Date.now(), rows: r.rows.map(x => Object.fromEntries(r.cols.map((c, i) => [c, x[i]]))), rejects: r.rejects || null }; // rejects: null = server older than 2026-11-09.1
   } catch (e) { HO.rep = { err: errMsg(e), rows: [] }; }
   finally { HO.repLoading = false; renderHo(); }
 }
@@ -1955,6 +1955,7 @@ function renderHoReport(el){
   const carriers = [...new Map(all.map(p => [carrierF(p.carrier), p.carrier || 'ไม่ทราบขนส่ง']).concat(gapAll.map(o => [carrierF(o[2]), o[2] || 'ไม่ทราบขนส่ง']))).entries()];
   const shops = [...new Set(all.map(p => p.shop || '(ไม่ระบุ)').concat(gapAll.map(o => o[3] || '(ไม่ระบุ)')))].sort().map(x => [x, x]);
   const un = f.status === 'unscanned', gapMiss = hoGapMiss(), gapTile = hoGapTile(gapMiss);
+  const rj = f.status === 'rejected', rejRows = hoRejRows(), rejOpen = rejRows.filter(x => !x.passAt).length, rejOld = !!(R && !R.rejects);
   const stRows = (() => { const keep = f.status; f.status = ''; const r = hoRepFiltered(); f.status = keep; return r; })();
   const cnt = k => stRows.filter(p => k === 'issue' ? p.issue : hoRepStatus(p) === k).length;
   let html = hoTabs() + `<div class="card ho-filters">
@@ -1977,11 +1978,13 @@ function renderHoReport(el){
       <div class="kpi" data-act="stat" data-stat="collected" role="button" tabindex="0" aria-pressed="${f.status === 'collected'}"><div class="v" style="color:var(--ok)">${num(cnt('collected'))}</div><div class="l">ขนส่งรับแล้ว</div></div>
       <div class="kpi" data-act="stat" data-stat="open" role="button" tabindex="0" aria-pressed="${f.status === 'open'}"><div class="v" style="color:var(--warn)">${num(stRows.length - cnt('collected'))}</div><div class="l">ยังไม่ยืนยัน</div></div>
       <div class="kpi${cnt('issue') ? ' alert' : ''}" data-act="stat" data-stat="issue" role="button" tabindex="0" aria-pressed="${f.status === 'issue'}"><div class="v">${num(cnt('issue'))}</div><div class="l">⚠ ต้องติดตาม</div></div>
-      <div class="kpi${gapTile.alert ? ' alert' : ''}" data-act="stat" data-stat="unscanned" role="button" tabindex="0" aria-pressed="${un}"><div class="v" style="color:${gapTile.color}">${gapTile.v}</div><div class="l">✕ ไม่ได้สแกนส่งมอบ</div></div></div>
-      <div class="toolbar"><button class="ghost" data-act="csv" ${(un ? gapMiss.length : rows.length) ? '' : 'disabled'}>ดาวน์โหลด Excel (.csv)</button>
+      <div class="kpi${gapTile.alert ? ' alert' : ''}" data-act="stat" data-stat="unscanned" role="button" tabindex="0" aria-pressed="${un}"><div class="v" style="color:${gapTile.color}">${gapTile.v}</div><div class="l">✕ ไม่ได้สแกนส่งมอบ</div></div>
+      <div class="kpi${rejOpen ? ' alert' : ''}" data-act="stat" data-stat="rejected" role="button" tabindex="0" aria-pressed="${rj}"><div class="v" style="color:${rejOld ? 'var(--muted)' : rejOpen ? 'var(--bad)' : 'var(--ok)'}">${rejOld ? '—' : num(rejOpen)}</div><div class="l">⛔ สแกนไม่ผ่าน</div></div></div>
+      <div class="toolbar"><button class="ghost" data-act="csv" ${(un ? gapMiss.length : rj ? rejRows.length : rows.length) ? '' : 'disabled'}>ดาวน์โหลด Excel (.csv)</button>
       ${un ? `<button class="ghost" data-act="gap" ${HO.gap && HO.gap.loading ? 'disabled' : ''}>🔄 เทียบกับ JST ใหม่</button>` : ''}
-      <span class="hint">${un ? gapTile.note : HO.repLoading ? 'กำลังโหลด…' : R ? 'ข้อมูล ' + hoTime(R.at) : ''}</span></div>`;
+      <span class="hint">${un ? gapTile.note : rj ? (rejOld ? '' : `${num(rejRows.length)} เลข · ยังไม่ผ่าน ${num(rejOpen)} · ภายหลังสแกนผ่านแล้ว ${num(rejRows.length - rejOpen)} · ข้อมูล ${hoTime(R.at)}`) : HO.repLoading ? 'กำลังโหลด…' : R ? 'ข้อมูล ' + hoTime(R.at) : ''}</span></div>`;
     if (un) html += hoGapList(gapMiss);
+    else if (rj) html += hoRejList(rejRows, rejOld);
     else html += rows.length ? `<div class="list">` + rows.slice(0, 300).map(p => `<button class="item ho-row" data-act="detail" data-id="${esc(p.ho)}"><div class="main">
         <div class="t1"><b class="mono">${esc(p.tracking)}</b>${hoJstPill({ jst: p.jst, flaggedAt: p.issue, done: false })}${p.scanCode ? `<span class="muted" style="font-size:12px">สแกนเลข ${esc(p.scanCode)}</span>` : ''}</div>
         <div class="t2"><b>${esc(p.carrier || 'ไม่ทราบขนส่ง')}</b> · ${esc(p.shop || 'ไม่ระบุช่องทาง')} · สแกน ${hoTime(p.at)} โดย ${esc(p.by)}${p.driver ? ' · คนรถเซ็นรับ ' + esc(p.driver) : ''}${p.orderId ? ' · ออเดอร์ ' + esc(p.orderId) : ''}</div>
@@ -2009,7 +2012,10 @@ function renderHoReport(el){
   // the JST comparison: by itself for one day; for longer periods when the tile is chosen
   if (!HO.gap || HO.gap.key !== hoGapKey()) hoGapLoad(false, !un);
   const csv = el.querySelector('[data-act=csv]');
-  if (csv && un) csv.onclick = () => hoDownloadCsv([['เลขพัสดุ', 'เลขออเดอร์ JST', 'ขนส่ง', 'ช่องทางการขาย', 'จัดส่งใน JST เมื่อ', 'สถานะออเดอร์', 'สถานะขนส่ง']].concat(gapMiss.map(o => o.slice(0, 7))),
+  if (csv && rj) csv.onclick = () => hoDownloadCsv([['สแกนล่าสุดเมื่อ', 'ผู้สแกน', 'ทุกคนที่สแกน', 'จำนวนครั้ง', 'เลขที่สแกน', 'เลขพัสดุ', 'เลขออเดอร์ JST', 'เลขออเดอร์ออนไลน์', 'ขนส่ง', 'ร้านค้า', 'เหตุผล', 'สถานะออเดอร์ใน JST', 'ภายหลังสแกนผ่านเมื่อ', 'สแกนผ่านโดย']]
+      .concat(rejRows.map(x => [hoTime(x.at), x.by, x.people.join(', '), x.n, x.code, x.tracking, x.orderId, x.onlineId, x.carrier, x.shop, x.reason, x.jstStatus, x.passAt ? hoTime(x.passAt) : 'ยังไม่ผ่าน', x.passBy])),
+    `สแกนไม่ผ่าน ${f.from === f.to ? f.from : f.from + ' ถึง ' + f.to}.csv`);
+  else if (csv && un) csv.onclick = () => hoDownloadCsv([['เลขพัสดุ', 'เลขออเดอร์ JST', 'ขนส่ง', 'ช่องทางการขาย', 'จัดส่งใน JST เมื่อ', 'สถานะออเดอร์', 'สถานะขนส่ง']].concat(gapMiss.map(o => o.slice(0, 7))),
     `ไม่ได้สแกนส่งมอบ ${f.from === f.to ? f.from : f.from + ' ถึง ' + f.to}.csv`);
   else if (csv) csv.onclick = () => {
     const head = ['เลขพัสดุ', 'ขนส่ง', 'ช่องทางการขาย', 'สแกนเมื่อ', 'ผู้สแกน', 'คนรถที่เซ็นรับ', 'สถานะ', 'สถานะใน JST', 'เลขออเดอร์ JST', 'ต้องติดตาม', 'บันทึกการติดตาม'];
@@ -2067,6 +2073,26 @@ function hoGapList(miss){
       <div class="t1"><b class="mono">${esc(o[0])}</b><span class="pill bad">✕ ไม่ได้สแกน</span></div>
       <div class="t2"><b>${esc(o[2] || 'ไม่ทราบขนส่ง')}</b> · ${esc(o[3] || 'ไม่ระบุช่องทาง')} · จัดส่งใน JST ${esc(o[4].slice(5))} · ออเดอร์ ${esc(o[1])}${o[6] ? ' · ' + esc(o[6]) : ''}</div></div></div>`).join('') + `</div>`
     + (miss.length > 300 ? `<p class="hint" style="margin-top:8px">แสดง 300 จาก ${num(miss.length)} — กรองให้แคบลง หรือดาวน์โหลด Excel เพื่อดูทั้งหมด</p>` : '');
+}
+// ---- สแกนไม่ผ่าน (ผู้ใช้สั่ง 9 พ.ย.): ใครสแกน เมื่อไร ทำไม และภายหลังสแกนผ่านหรือยัง — ยังไม่ผ่าน = ส่งกล่องกลับให้คนจัดออเดอร์ ----
+const HO_REJ_KIND = { unchecked: 'ยังไม่ได้ตรวจสอบออเดอร์', blocked: 'ห้ามส่งมอบ', not_found: 'ไม่พบใน JST', jst_down: 'เช็ก JST ไม่ได้' };
+function hoRejRows(){
+  const f = HO.f, R = HO.rep, q = (f.q || '').trim().toUpperCase();
+  if (!R || !R.rejects) return [];
+  const from = f.from ? new Date(f.from + 'T00:00:00').getTime() : 0, to = f.to ? new Date(f.to + 'T23:59:59.999').getTime() : Infinity;
+  return R.rejects.filter(x => x.at >= from && x.at <= to && (!f.carrier || carrierF(x.carrier) === f.carrier) && (!f.shop || (x.shop || '(ไม่ระบุ)') === f.shop)
+    && (!q || [x.code, x.tracking, x.orderId, x.onlineId].some(v => String(v || '').toUpperCase().includes(q))))
+    .sort((a, b) => (a.passAt ? 1 : 0) - (b.passAt ? 1 : 0) || b.at - a.at);
+}
+function hoRejList(list, old){
+  if (old) return `<div class="empty">ต้องอัปเดต Code.gs (เวอร์ชัน 2026-11-09.1 ขึ้นไป) ก่อน — ระบบเริ่มเก็บการสแกนที่ไม่ผ่านหลังอัปเดต</div>`;
+  if (!list.length) return `<div class="empty" style="color:var(--ok)">✓ ไม่มีการสแกนที่ไม่ผ่านตามตัวกรองนี้</div>`;
+  return `<div class="list">` + list.slice(0, 300).map(x => `<div class="item ho-row"><div class="main">
+      <div class="t1"><b class="mono">${esc(x.onlineId || x.tracking || x.code)}</b>${x.passAt ? `<span class="pill ok">✓ ภายหลังสแกนผ่านแล้ว</span>` : `<span class="pill bad">⛔ ยังไม่ผ่าน</span>`}</div>
+      <div class="t2" style="color:var(--bad)">${esc(HO_REJ_KIND[x.kind] || x.kind)}${x.jstStatus ? ' · JST: ' + esc(x.jstStatus) : ''}</div>
+      <div class="t2"><b>${esc(x.carrier || 'ไม่ทราบขนส่ง')}</b> · ${esc(x.shop || 'ไม่ระบุช่องทาง')}${x.orderId ? ' · ออเดอร์ ' + esc(x.orderId) : ''}${x.tracking && x.tracking !== (x.onlineId || '') ? ' · พัสดุ ' + esc(x.tracking) : ''}${x.code && x.code !== x.tracking ? ' · สแกนเลข ' + esc(x.code) : ''}</div>
+      <div class="t2">สแกนไม่ผ่าน ${x.n > 1 ? num(x.n) + ' ครั้ง · ล่าสุด ' : ''}${hoTime(x.at)} โดย ${esc(x.people.join(', ') || x.by)}${x.passAt ? ` · สแกนผ่าน ${hoTime(x.passAt)} โดย ${esc(x.passBy)}` : ''}</div></div></div>`).join('') + `</div>`
+    + (list.length > 300 ? `<p class="hint" style="margin-top:8px">แสดง 300 จาก ${num(list.length)} — กรองให้แคบลง หรือดาวน์โหลด Excel เพื่อดูทั้งหมด</p>` : '');
 }
 function hoDownloadCsv(lines, name){
   const text = '\ufeff' + lines.map(r => r.map(v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`).join(',')).join('\r\n');
