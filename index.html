@@ -539,7 +539,7 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbz-MAgXzixFmmG7f5CPwKAj
 </script>
 <script>
 (() => {
-const $ = s => document.querySelector(s);
+const $ = (s, root) => (root || document).querySelector(s);
 function h(tag, props, ...kids){
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(props || {})) {
@@ -565,9 +565,42 @@ const run = (fn, ...args) => new Promise((resolve, reject) => {
     return;
   }
   if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(API_URL)) { reject(new Error('ยังไม่ได้ตั้งค่า API_URL ในไฟล์ index.html')); return; }
+  const t0 = Date.now();
   fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn, args }) })
-    .then(res => res.json()).then(r => unwrap(r, resolve, reject), () => reject(new Error('เชื่อมต่อไม่ได้')));
+    .then(res => res.text().then(txt => {
+      let r;
+      try { r = JSON.parse(txt); }
+      catch {
+        // Google answered with an error page instead of the app's answer (too many runs at once, quota, timeout)
+        const detail = String(txt || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300);
+        clientLog({ fn, kind: 'bad_response', msg: 'HTTP ' + res.status, detail, ms: Date.now() - t0 });
+        reject(new Error('SERVER_BUSY: เซิร์ฟเวอร์ Google ตอบผิดปกติ (HTTP ' + res.status + ') — ลองใหม่อีกครั้ง')); return;
+      }
+      unwrap(r, resolve, reject);
+    }), () => { clientLog({ fn, kind: 'network', msg: 'เชื่อมต่อไม่ได้', ms: Date.now() - t0 }); reject(new Error('เชื่อมต่อไม่ได้')); });
 });
+// ---- problems on the phone are kept and sent to the sheet "บันทึกข้อผิดพลาด" (16 พ.ย.: staff saw errors nobody could trace) ----
+const ERRQ_KEY = 'tmws.errq';
+function clientLog(x){
+  if (x.fn === 'logClientError') return;
+  try {
+    const q = JSON.parse(lsGet(ERRQ_KEY) || '[]');
+    q.push(Object.assign({ at: Date.now(), who: (S && S.me && (S.me.name || S.me.username)) || '', page: S && S.view || '' }, x));
+    lsSet(ERRQ_KEY, JSON.stringify(q.slice(-30)));
+  } catch {}
+}
+let errqSending = false;
+async function flushClientLog(){
+  if (errqSending || !S.pin) return;
+  let q; try { q = JSON.parse(lsGet(ERRQ_KEY) || '[]'); } catch { q = []; }
+  if (!q.length) return;
+  errqSending = true;
+  try { await run('logClientError', S.pin, q.slice(0, 20)); lsSet(ERRQ_KEY, JSON.stringify(q.slice(20))); }
+  catch {} // server not updated yet / still no signal: kept for next time
+  finally { errqSending = false; }
+}
+// a temporary problem on Google's side or many phones at once — worth sending the same thing again
+const RETRYABLE = /^BUSY|^SERVER_BUSY|Lock timeout|simultaneous|too many|Service invoked|try again|ลองใหม่อีกครั้ง|เชื่อมต่อไม่ได้|Exceeded maximum execution|timed out/i;
 
 // ---------- expiry helpers ----------
 const TH_M = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
@@ -647,7 +680,9 @@ function toast(msg){ const t = $('#toast'); t.textContent = msg; t.hidden = fals
 // ---------- views ----------
 function setView(v){
   if (hoOnly()) v = 'ho';
+  const was = S.view;
   S.view = v;
+  if (was === 'ho' && v !== 'ho' && S.me) setTimeout(() => refresh(true), 0); // counts were not polled while on the handover tab
   document.body.classList.toggle('v-ho', v === 'ho');
   document.title = v === 'ho' ? '2NK ส่งมอบสินค้า' : '2nk Stock count';
   for (const id of ['count','ho','sum','jst','exp','rounds']) $('#v-' + id).hidden = id !== v;
@@ -1167,6 +1202,7 @@ function errMsg(e){
   if (m === 'AUTH_REQUIRED') { setTimeout(authLost, 0); return 'หมดเวลาเข้าสู่ระบบ กรุณาเข้าสู่ระบบอีกครั้ง'; }
   if (m === 'ADMIN_INVALID') return 'รหัสผู้ดูแลไม่ถูกต้อง ทำรายการไม่สำเร็จ';
   if (m === 'NO_PERMISSION') return 'บัญชีนี้ (ผู้ส่งมอบสินค้า) ใช้ได้เฉพาะแท็บส่งมอบ';
+  if (/^(SERVER_)?BUSY:/.test(m)) return m.replace(/^(SERVER_)?BUSY:\s*/, '');
   return m || 'เชื่อมต่อไม่ได้ ลองอีกครั้ง';
 }
 
@@ -1546,13 +1582,15 @@ const roleBadge = r => `<span class="role ${ROLE_NAME[r] ? r : 'user'}">${ROLE_N
 const hoOnly = () => !!(S.me && S.me.role === 'handover');
 const LOGO = () => ($('.logo img') || {}).src || '';
 
-function openModal(html, wide){
+function openModal(html, wide, opt){
+  opt = opt || {};
   const el = document.createElement('div');
   el.className = 'modal';
   el.innerHTML = `<div class="modal-card${wide ? ' wide' : ''}" role="dialog" aria-modal="true">${html}</div>`;
   document.body.append(el);
-  const close = () => el.remove();
-  el.addEventListener('click', e => { if (e.target === el) close(); });
+  const close = () => { if (!el.isConnected) return; el.remove(); if (opt.onClose) opt.onClose(); };
+  // sticky = a tap outside the box does nothing (16 พ.ย.: the sign-off box closed by a stray tap and lost the signature and photos)
+  el.addEventListener('click', e => { if (e.target === el && !opt.sticky) close(); });
   return { el, close };
 }
 function confirmBox(title, text, okLabel, danger){
@@ -1844,7 +1882,9 @@ async function hoLoad(force){
   if (HO.loading || (!force && Date.now() - HO.listAt < 20e3)) return;
   HO.loading = true;
   try {
-    HO.list = await run('hoList', S.pin); HO.err = ''; HO.listAt = Date.now();
+    const r = await run('hoList', S.pin, HO.list && HO.list.rev || '');
+    if (!(r && r.same)) HO.list = r;
+    HO.err = ''; HO.listAt = Date.now();
     const ck = HO.list.check;
     if (!ck || Date.now() - ck.at > 15 * 60e3) hoTick();
   }
@@ -1863,7 +1903,12 @@ async function hoTick(){
   finally { HO.ticking = false; }
 }
 // called by the 8-second poll while the tab is open
-function hoPoll(){ hoTick(); if (HO.cur) { hoReloadCur(); hoIdxLoad(false); } else if (HO.tab !== 'report') hoLoad(false); }
+// 16 พ.ย.: every phone asked every 8 s even while the last answer had not come back — the requests piled up when many phones were open
+function hoPoll(){
+  hoTick(); flushClientLog();
+  if (HO.cur) { if (!HO.signing && Date.now() - (HO.curAt || 0) >= 15e3) hoReloadCur(); hoIdxLoad(false); }
+  else if (HO.tab !== 'report') hoLoad(false);
+}
 
 function renderHo(){
   $('#hoDash').hidden = !!HO.cur; $('#hoScanView').hidden = !HO.cur;
@@ -2169,21 +2214,37 @@ async function hoOpen(id){
   await hoReloadCur();
   HO.msg = null; renderHoScan();
 }
-async function hoReloadCur(){
+async function hoReloadCur(force){
   const cur = HO.cur; if (!cur) return;
+  if (HO.curLoading) { if (force) HO.curAgain = true; return; }
+  HO.curLoading = true; HO.curAt = Date.now();
   try {
-    const r = await run('hoGet', S.pin, cur.id);
+    const r = await run('hoGet', S.pin, cur.id, force ? '' : HO.curRev || '');
     if (HO.cur !== cur) return;
+    if (r.same) return;
+    HO.curRev = r.rev || '';
+    if (r.handover && r.handover.status !== 'open' && r.next && r.next !== cur.id) {
+      // another phone signed this round off: the boxes still waiting are in today's open round — keep scanning there
+      cur.id = r.next; cur.status = 'open'; HO.curRev = '';
+      HO.items = HO.items.filter(p => p.state === 'sending' || p.state === 'error');
+      if (!HO.signing) toast('อีกเครื่องให้คนรถเซ็นรับไปแล้ว — กล่องที่เหลืออยู่ในรายการนี้');
+      HO.curAgain = true; return;
+    }
+    if (HO.signing && r.handover && r.handover.status !== 'open') return; // the sign-off box stays open; the server follows the round
     HO.cur = Object.assign(cur, r.handover);
     // keep this phone's scans that are still being sent or were refused; the rest comes from the server (other phones' scans too)
     const local = HO.items.filter(p => p.state === 'sending' || p.state === 'error'), warns = {};
     HO.items.forEach(p => { if (p.warn) warns[p.tracking] = p.warn; });
     HO.items = local.concat(r.parcels.filter(p => !p.void && !local.some(l => l.tracking === p.tracking)).map(p => Object.assign(p, { warn: warns[p.tracking] || null })));
     if (HO.cur.status !== 'open') { toast(HO.cur.status === 'closed' ? 'รอบนี้ส่งมอบแล้ว' : 'รอบนี้ถูกยกเลิกแล้ว'); hoBack(); return; }
-  } catch (e) { if (e.message === 'AUTH_REQUIRED') authLost(); }
-  renderHoScan();
+  } catch (e) { if (e.message === 'AUTH_REQUIRED') { authLost(); return; } }
+  finally {
+    HO.curLoading = false;
+    if (HO.curAgain && HO.cur) { HO.curAgain = false; setTimeout(() => hoReloadCur(true), 300); }
+  }
+  if (HO.cur === cur) renderHoScan();
 }
-function hoBack(){ HO.cur = null; HO.items = []; HO.listAt = 0; renderHo(); hoLoad(true); window.scrollTo(0, 0); }
+function hoBack(){ HO.cur = null; HO.items = []; HO.listAt = 0; HO.curRev = ''; renderHo(); hoLoad(true); window.scrollTo(0, 0); }
 const hoCount = () => HO.items.filter(p => p.state !== 'error').length;
 /** parcels in the open round grouped by courier: [{key, name, n}] (key '' = courier not known yet) */
 function hoGroups(){
@@ -2263,6 +2324,7 @@ async function hoPump(){
       if (!p) break;
       try {
         Object.assign(p, await run('hoScan', S.pin, cur.id, p.send || p.tracking), { state: '' });
+        if (p.ho && p.ho !== cur.id && HO.cur === cur) { cur.id = p.ho; HO.curRev = ''; } // round signed off meanwhile: saved in today's open round
         p.warn = hoJstWarn(p.jstLookup, '');
         const j = p.jstLookup || {};
         if (!p.warn && p.fast) { /* already answered from the waiting-for-pickup list */ }
@@ -2275,7 +2337,7 @@ async function hoPump(){
         if (e.message === 'AUTH_REQUIRED') { authLost(); break; }
         if (e.message === 'เชื่อมต่อไม่ได้') { await new Promise(r => setTimeout(r, 3000)); continue; } // no signal: keep it queued and retry
         // several phones at once: the server queue was full / Google limited simultaneous runs → wait a moment and send it again
-        if (/^BUSY|Lock timeout|simultaneous|too many|Service invoked|try again|ลองใหม่อีกครั้ง/i.test(e.message || '') && (p.tries = (p.tries || 0) + 1) <= 6) {
+        if (RETRYABLE.test(e.message || '') && (p.tries = (p.tries || 0) + 1) <= 6) {
           await new Promise(r => setTimeout(r, 800 * p.tries + Math.random() * 700)); continue;
         }
         const m = e.message || '';
@@ -2291,7 +2353,7 @@ async function hoPump(){
         }
         else if (/^HO_JST_DOWN/.test(m)) { drop(); hoFeedback('warn', 'เช็ก JST ไม่ได้ — สแกนใหม่อีกครั้ง', p.tracking + ' · ไม่ได้บันทึก', 'สแกนใหม่'); }
         else if (/สแกนไปแล้ว/.test(m)) { drop(); hoFeedback('dup', 'สแกนซ้ำ', m.replace(/^\S+\s*/, ''), 'สแกนซ้ำ'); }
-        else { p.state = 'error'; p.err = errMsg(e); hoFeedback('bad', 'ไม่ได้บันทึก', p.err, 'ไม่ได้บันทึก'); }
+        else { p.state = 'error'; p.err = errMsg(e); clientLog({ fn: 'hoScan', kind: 'scan_failed', msg: m, detail: p.tracking }); hoFeedback('bad', 'ไม่ได้บันทึก', p.err, 'ไม่ได้บันทึก'); }
       }
       if (HO.cur === cur) renderHoScan();
     }
@@ -2342,6 +2404,10 @@ function hoCloseDlg(){
   const h = HO.cur, groups = hoGroups(), known = groups.filter(g => g.key && !g.miss), unk = groups.find(g => !g.key);
   if (!known.length && !h.carrier) { toast('ยังไม่รู้ว่าพัสดุเป็นของขนส่งไหน รอระบบเช็กกับ JST สักครู่ หรือสแกนให้ครบก่อน'); return; }
   let pick = (known[0] || {}).name || h.carrier, n = 0;
+  // the camera stays off while the driver signs (iPhone may reload a page that keeps the camera on while taking photos)
+  if (typeof closeScanner === 'function' && !$('#scanner').hidden) closeScanner();
+  HO.signing = true;
+  const reqId = (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2)).replace(/[^A-Za-z0-9-]/g, '');
   const md = openModal(`<div class="modal-head">ให้คนรถเซ็นรับ (ไม่บังคับ)</div><div class="modal-body">
     <div class="field"><label>คนรถของขนส่งไหนมารับ?</label>
       <div class="chips ho-carriers" id="hoPick">${known.map(g => `<button type="button" class="chip" data-c="${esc(g.name)}">${esc(g.name)} <b>${num(g.n)}</b></button>`).join('')}</div>
@@ -2366,7 +2432,8 @@ function hoCloseDlg(){
       <canvas id="hoSign" class="ho-sign"></canvas><p class="hint" id="hoSignNote"></p></div>
     <div class="field"><label>หมายเหตุ</label><input type="text" id="hoNote" autocomplete="off"></div>
     <p class="hint bad" id="hoCloseErr"></p></div>
-    <div class="modal-foot"><span style="flex:1"></span><button class="ghost" data-x>กลับไปสแกน</button><button class="ghost solid" data-ok>ยืนยันส่งมอบ</button></div>`, true);
+    <div class="modal-foot"><span style="flex:1"></span><button class="ghost" data-x>กลับไปสแกน</button><button class="ghost solid" data-ok>ยืนยันส่งมอบ</button></div>`, true,
+    { sticky: true, onClose: () => { HO.signing = false; HO.curAt = 0; } });
   const q = s => md.el.querySelector(s), total = hoCount();
   // scanned = the driver scanned at the warehouse → JST updates → sign only parcels JST shows as picked up (several trucks, part of the boxes each)
   let mode = lsGet('tmws.hoMode.' + pick) || 'scanned', refreshing = false, refreshedAt = 0, picked = false;
@@ -2375,6 +2442,7 @@ function hoCloseDlg(){
     if (refreshing) return; refreshing = true; update();
     try {
       const r = await run('hoRefresh', S.pin, h.id);
+      if (r.handover && r.handover.id && r.handover.id !== h.id) { h.id = r.handover.id; HO.curRev = ''; } // round signed off by another phone meanwhile
       HO.items = r.parcels.filter(p => !p.void); refreshedAt = r.at || Date.now();
       // nobody chose yet: pre-select the courier JST shows as having picked up the most boxes
       if (!picked) {
@@ -2433,7 +2501,10 @@ function hoCloseDlg(){
   q('#hoPhotoUp').onchange = addPhotos;
   const pad = signPad(q('#hoSign'));
   q('#hoSignClr').onclick = pad.clear;
-  q('[data-x]').onclick = md.close;
+  q('[data-x]').onclick = async () => {
+    if ((photos.length || !pad.empty() || q('#hoDriver').value.trim()) && !(await confirmBox('ปิดหน้าเซ็นรับ?', 'ลายเซ็นและรูปที่ถ่ายไว้จะหายไป', 'ปิด', true))) return;
+    md.close();
+  };
   q('[data-ok]').onclick = async () => {
     const driver = q('#hoDriver').value.trim(), err = q('#hoCloseErr');
     if (!pick) { err.textContent = 'เลือกขนส่งที่มารับ'; return; }
@@ -2445,8 +2516,18 @@ function hoCloseDlg(){
     const ok = q('[data-ok]'); ok.disabled = true; ok.textContent = 'กำลังบันทึก…'; err.textContent = '';
     try {
       const plate = q('#hoPlate').value.trim();
-      const r = await run('hoClose', S.pin, h.id, { carrier: pick, withUnknown: mode !== 'scanned' && (!q('#hoUnk') || q('#hoUnk').checked), onlyCollected: mode === 'scanned', expect: n,
-        driver, plate, phone: q('#hoPhone').value.trim(), note: q('#hoNote').value.trim(), photos, photo: photos[0], sign: pad.data() });
+      const body = { carrier: pick, withUnknown: mode !== 'scanned' && (!q('#hoUnk') || q('#hoUnk').checked), onlyCollected: mode === 'scanned', expect: n,
+        driver, plate, phone: q('#hoPhone').value.trim(), note: q('#hoNote').value.trim(), photos, photo: photos[0], sign: pad.data(), reqId };
+      // same reqId every try: if the first one was saved but its answer got lost, the server answers it again instead of signing twice
+      let r;
+      for (let t = 1; ; t++) {
+        try { r = await run('hoClose', S.pin, HO.cur ? HO.cur.id : h.id, body); break; }
+        catch (e) {
+          if (!RETRYABLE.test(e.message || '') || t >= 5) { clientLog({ fn: 'hoClose', kind: 'sign_failed', msg: e.message || '', detail: pick + ' ' + n + ' กล่อง · ลอง ' + t + ' ครั้ง' }); throw e; }
+          ok.textContent = `ระบบไม่ว่าง กำลังลองใหม่ (${t + 1}/5)…`;
+          await new Promise(res => setTimeout(res, 1500 * t + Math.random() * 1000));
+        }
+      }
       lsSet('tmws.hoDriver.' + pick, driver); lsSet('tmws.hoPlate.' + pick, plate);
       md.close(); sfx('ok');
       if (r.restId) {
@@ -2646,7 +2727,8 @@ async function startApp(init){
   if (init.rounds && !applyCounts(init)) render(); else await refresh(true);
   if (!timersOn) {
     timersOn = true;
-    setInterval(() => { if (S.me && document.visibilityState === 'visible') { refresh(); if (S.view === 'ho') hoPoll(); } }, POLL_MS);
+    // 16 พ.ย.: on the handover tab only the handover data is polled (stock-count data was also read every 8 s by every phone there)
+    setInterval(() => { if (S.me && document.visibilityState === 'visible') { if (S.view === 'ho') hoPoll(); else refresh(); } }, POLL_MS);
     setInterval(() => { if (S.me && document.visibilityState === 'visible') loadProducts(); }, 3 * 60e3); // picks up rows added to the Products sheet
   }
 }
