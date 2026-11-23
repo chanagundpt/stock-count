@@ -2164,22 +2164,37 @@ function hoBind(el){
   });
 }
 // parcels waiting for pickup in JST (server rebuilds the list every 15 min): a scanned number found here gets its result at once
+// 23 พ.ย.: the list comes straight from the server's cache (never waits for JST); asked every minute — same version = no data sent again.
+// When the server says it is older than 5 minutes, this phone asks for a rebuild in a separate call and keeps scanning meanwhile.
 async function hoIdxLoad(force){
-  if (HO.idxLoading || (!force && Date.now() - HO.idxAt < 10 * 60e3)) return;
+  if (HO.idxLoading || (!force && Date.now() - HO.idxAt < (HO.idxEvery || 60e3))) return;
   HO.idxLoading = true;
   try {
-    const r = await run('hoIndex', S.pin), m = new Map();
-    (r.data || '').split('\n').forEach(line => {
-      const [tracking, orderId, online, carrier] = line.split('\t');
-      if (!tracking) return;
-      const v = { tracking, orderId, carrier };
-      m.set(tracking, v);
-      if (online && !m.has(online)) m.set(online, v);
-      if (orderId && !m.has(orderId)) m.set(orderId, v);
-    });
-    HO.idx = m; HO.idxAt = Date.now();
+    const r = await run('hoIndex', S.pin, HO.idxVer || 0);
+    HO.idxEvery = r.stale === undefined ? 10 * 60e3 : 60e3; // server before 2026-11-23.1 builds inside this call and sends everything each time
+    if (!r.same) {
+      const m = new Map();
+      (r.data || '').split('\n').forEach(line => {
+        const [tracking, orderId, online, carrier] = line.split('\t');
+        if (!tracking) return;
+        const v = { tracking, orderId, carrier };
+        m.set(tracking, v);
+        if (online && !m.has(online)) m.set(online, v);
+        if (orderId && !m.has(orderId)) m.set(orderId, v);
+      });
+      HO.idx = m; HO.idxVer = r.at || 0;
+    }
+    HO.idxAt = Date.now();
+    if (r.stale) hoIdxBuild();
   } catch {} // older server / no list yet: every scan asks JST as before
   finally { HO.idxLoading = false; }
+}
+async function hoIdxBuild(){
+  if (HO.idxBuilding || Date.now() - (HO.idxBuildAt || 0) < 60e3) return;
+  HO.idxBuilding = true; HO.idxBuildAt = Date.now();
+  try { const b = await run('hoIndexBuild', S.pin); if (b && b.at && b.at !== HO.idxVer) { HO.idxBuilding = false; hoIdxLoad(true); } }
+  catch {}
+  finally { HO.idxBuilding = false; }
 }
 // one tap: open today's scanning round and the camera — every scan = this parcel went out to a courier
 async function hoQuickStart(btn){
