@@ -2078,8 +2078,9 @@ function renderHoReport(el){
       <label class="field"><span>สถานะการขนส่ง</span><select data-f="status">${opts(HO_STATUS.slice(1), f.status, 'ทุกสถานะ')}</select></label>
     </div>
     <input type="search" data-f="q" placeholder="ค้นหาเลขพัสดุ / เลขออเดอร์" value="${esc(f.q)}"></div>`;
+  // (the JST comparison runs beside the report: its bar must not hide the report — 23 พ.ย. the `else` below hung on this line by mistake)
+  if (HO.gap && HO.gap.loading) html += lbar('hoUnscanned', 'กำลังเทียบกับออเดอร์ใน JST (รายงานด้านล่างใช้ได้เลย)');
   if (HO.repLoading && !R) html += lbar('hoReport', 'กำลังโหลดรายงาน');
-  if (HO.gap && HO.gap.loading) html += lbar('hoUnscanned', 'กำลังเทียบกับออเดอร์ใน JST');
   else if (R && R.err) html += `<div class="warnbox bad">${esc(R.err)}</div>`;
   else {
     html += `<div class="kpis ho-kpis5">
@@ -2782,7 +2783,7 @@ async function loadProducts(){
 // 23 พ.ย.: a phone that keeps the app open (or added to the home screen) went on using an old copy of this page after an update.
 // The page now looks at the published copy every few minutes; a newer build → reload when nobody is in the middle of something,
 // otherwise a bar at the top to tap.
-const PAGE_BUILD = '2026-11-23.3';
+const PAGE_BUILD = '2026-11-23.4';
 let newBuild = '';
 async function checkPageBuild(){
   if (IN_GAS || location.protocol === 'file:') return;
