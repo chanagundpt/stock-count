@@ -109,6 +109,11 @@ button.ghost.danger{color:var(--bad);border-color:var(--bad)}
 .item .t2{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
 .item .qty{font-family:var(--f-mono);font-weight:600;font-size:18px;white-space:nowrap}
 .item.void{opacity:.55} .item.void .qty{text-decoration:line-through}
+.lbar{padding:16px;background:var(--surface);border:1px dashed var(--line);border-radius:12px;margin:8px 0}
+.lbar-t{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;color:var(--muted);font-size:14px;margin-bottom:8px}
+.lbar-t b{color:var(--text,inherit);font-weight:600}
+.lbar-track{height:8px;border-radius:99px;background:rgba(127,127,127,.25);overflow:hidden}
+.lbar-track i{display:block;height:100%;width:0;border-radius:99px;background:var(--accent,#4fb3d9);transition:width .25s linear}
 .empty{padding:22px 16px;text-align:center;color:var(--muted);background:var(--surface);border:1px dashed var(--line);border-radius:12px}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
 @media (max-width:420px){.kpis{grid-template-columns:repeat(2,1fr)}}
@@ -559,7 +564,31 @@ const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
 // inside Apps Script → google.script.run; hosted elsewhere → POST JSON to the /exec URL (text/plain keeps it a simple CORS request)
 const IN_GAS = !!(window.google && google.script && google.script.run);
 const unwrap = (r, resolve, reject) => r && r.ok ? resolve(r.data) : reject(new Error(r ? r.error : 'ไม่มีการตอบกลับ'));
-const run = (fn, ...args) => new Promise((resolve, reject) => {
+// ---- loading bar (ผู้ใช้สั่ง 23 พ.ย.): how far a load is and about when it ends — estimated from how long this phone's last loads took ----
+const RUN_AT = {}, DUR_DEFAULT = { hoList: 4e3, hoGet: 3e3, hoReport: 6e3, hoUnscanned: 60e3, hoRefresh: 10e3, expiryReport: 15e3 };
+const durOf = fn => Number(lsGet('tmws.dur.' + fn)) || DUR_DEFAULT[fn] || 5e3;
+function runTimed(fn, p){
+  const t0 = RUN_AT[fn] = Date.now();
+  const done = ok => { if (RUN_AT[fn] === t0) delete RUN_AT[fn]; if (ok) { const d = Date.now() - t0, old = Number(lsGet('tmws.dur.' + fn)); lsSet('tmws.dur.' + fn, String(Math.round(old ? old * .6 + d * .4 : d))); } };
+  p.then(() => done(true), () => done(false));
+  return p;
+}
+function lbarState(fn){
+  const est = durOf(fn), el = Date.now() - (RUN_AT[fn] || Date.now()), left = est - el;
+  // past the estimate: creeps towards the end, never shows 100% before the answer is here
+  const pct = left > 0 ? el / est * 92 : 92 + 7 * (1 - Math.exp(-(el - est) / est));
+  const sec = Math.ceil(left / 1000);
+  return { pct: Math.max(3, Math.min(99, pct)), eta: left <= 0 ? 'ใกล้เสร็จแล้ว…' : sec >= 90 ? 'อีกประมาณ ' + Math.round(sec / 60) + ' นาที' : 'อีกประมาณ ' + sec + ' วินาที' };
+}
+function lbar(fn, label){
+  const st = lbarState(fn);
+  return `<div class="lbar" data-fn="${fn}" role="progressbar" aria-label="${label}"><div class="lbar-t"><b>${label}</b><span data-eta>${st.eta}</span></div><div class="lbar-track"><i style="width:${st.pct.toFixed(1)}%"></i></div></div>`;
+}
+setInterval(() => document.querySelectorAll('.lbar').forEach(el => {
+  const st = lbarState(el.dataset.fn), i = el.querySelector('i'), e = el.querySelector('[data-eta]');
+  if (i) i.style.width = st.pct.toFixed(1) + '%'; if (e && e.textContent !== st.eta) e.textContent = st.eta;
+}), 250);
+const run = (fn, ...args) => runTimed(fn, new Promise((resolve, reject) => {
   if (IN_GAS) {
     google.script.run.withSuccessHandler(r => unwrap(r, resolve, reject)).withFailureHandler(() => reject(new Error('เชื่อมต่อไม่ได้')))[fn](...args);
     return;
@@ -578,7 +607,7 @@ const run = (fn, ...args) => new Promise((resolve, reject) => {
       }
       unwrap(r, resolve, reject);
     }), () => { clientLog({ fn, kind: 'network', msg: 'เชื่อมต่อไม่ได้', ms: Date.now() - t0 }); reject(new Error('เชื่อมต่อไม่ได้')); });
-});
+}));
 // ---- problems on the phone are kept and sent to the sheet "บันทึกข้อผิดพลาด" (16 พ.ย.: staff saw errors nobody could trace) ----
 const ERRQ_KEY = 'tmws.errq';
 function clientLog(x){
@@ -766,6 +795,28 @@ function countsFor(key){ return S.counts.filter(c => !c.void && canon(c) === key
 
 // current stock in JST for the product being counted = the "สินค้าคงคลัง" column (Qty), nothing deducted for locks
 const LIVE = new Map(); // product key → {state: 'loading'|'ok'|'none'|'err', qty, bins, at, msg}
+// 23 พ.ย.: JST stock of every product is kept on the phone (from the server's cache, ≤5 min old while someone is counting):
+// picking a product shows its stock at once; the live number (and bins) follows when JST answers
+const SNAP = { ver: 0, at: 0, map: new Map(), asked: 0, loading: false, building: false, builtAt: 0 };
+function snapOf(sel){ return sel && !sel.isNew ? SNAP.map.get(sel.sku) || (sel.barcode && SNAP.map.get('#' + sel.barcode)) || null : null; }
+async function loadSnap(force){
+  if (!S.me || hoOnly() || SNAP.loading || (!force && Date.now() - SNAP.asked < 60e3)) return;
+  SNAP.loading = true; SNAP.asked = Date.now();
+  try {
+    const r = await run('jstSnap', S.pin, SNAP.ver);
+    if (!r.same && r.at) {
+      const m = new Map();
+      r.data.split('\n').forEach(line => { const [sku, qty, bc] = line.split('\t'); if (!sku) return; const v = { qty: Number(qty) || 0, at: r.at }; m.set(sku, v); if (bc && !m.has('#' + bc)) m.set('#' + bc, v); });
+      SNAP.map = m; SNAP.ver = SNAP.at = r.at;
+      if (S.view === 'count' && S.sel) renderProd();
+    }
+    if (r.stale && !SNAP.building && Date.now() - SNAP.builtAt > 60e3) {
+      SNAP.building = true; SNAP.builtAt = Date.now();
+      run('jstSnapBuild', S.pin).then(b => { SNAP.building = false; if (b && b.at && b.at !== SNAP.ver) loadSnap(true); }, () => { SNAP.building = false; });
+    }
+  } catch { SNAP.asked = Date.now() + 9 * 60e3; } // server before 2026-11-23.2 / JST not reachable: try again in 10 minutes
+  finally { SNAP.loading = false; }
+}
 async function loadLiveStock(sel){
   if (!sel || sel.isNew) return;
   const key = sel.key, q = sel.sku || sel.barcode, cur = LIVE.get(key);
@@ -783,7 +834,10 @@ async function loadLiveStock(sel){
 }
 function liveStockLine(sel){
   if (sel.isNew) return null;
-  const s = LIVE.get(sel.key);
+  const s = LIVE.get(sel.key), sn = snapOf(sel);
+  // the stored number shows at once while the live one is on its way (or when JST cannot be reached right now)
+  if (sn && (!s || s.state === 'loading' || s.state === 'err')) return h('div', { class: 'live' }, 'สต๊อก JST ', h('b', { class: 'mono', text: num(sn.qty) }), ' ชิ้น',
+    h('span', { class: 'muted', text: ' · ณ ' + hhmm(sn.at) + ' น.' + (s && s.state === 'err' ? '' : ' · กำลังอัปเดต…') }));
   if (!s || s.state === 'loading') return h('div', { class: 'live muted', text: 'กำลังดึงสต๊อกจาก JST…' });
   if (s.state === 'none') return h('div', { class: 'live muted', text: 'สต๊อก JST: ไม่พบสินค้านี้ใน JST' });
   if (s.state === 'err') return h('div', { class: 'live muted' }, 'สต๊อก JST: ดึงไม่ได้ (' + s.msg + ') ',
@@ -1182,7 +1236,8 @@ $('#countForm').addEventListener('submit', async e => {
   const before = countsFor(sel.key).reduce((a, c) => a + c.qty, 0);
   const label = sel.isNew ? newName : (sel.name || sel.key);
   // the JST stock shown on screen is saved with the count, so reports compare with the stock at count time (server fills it in if not loaded yet)
-  const live = LIVE.get(sel.key), jst = live && live.state === 'ok' ? { qty: live.qty, at: live.at } : null;
+  const live = LIVE.get(sel.key), sn = snapOf(sel);
+  const jst = live && live.state === 'ok' ? { qty: live.qty, at: live.at } : sn && Date.now() - sn.at < 10 * 60e3 ? { qty: sn.qty, at: sn.at } : null;
   try {
     const saved = await run('addCount', {
       round: r.id, sku: sel.sku || sel.key, barcode: sel.barcode, name: sel.isNew ? newName : sel.name, isNew: sel.isNew,
@@ -1454,6 +1509,7 @@ const expMatch = (it, f) => f === 'all' ? true : it.days == null ? false
 function renderExpiry(){
   const head = $('#expHead'), box = $('#expList'); box.replaceChildren();
   const d = X.data;
+  if (X.loading) box.insertAdjacentHTML('beforeend', lbar('expiryReport', 'กำลังโหลดข้อมูลจากรอบนับและ JST'));
   head.textContent = X.loading ? 'กำลังโหลดข้อมูลจากรอบนับและ JST…'
     : d && d.round ? `รอบ "${d.round.name}" · ข้อมูล ณ ${hhmm(d.at)} น.` : '';
   if (X.err) { box.append(h('div', { class: 'notice', text: X.err })); return; }
@@ -1915,7 +1971,7 @@ function renderHo(){
   if (HO.cur) return renderHoScan();
   const L = HO.list, el = $('#hoDash');
   if (HO.tab === 'report') return renderHoReport(el);
-  if (!L) { if (hoPaint(el, HO.err ? `<div class="warnbox bad">${esc(HO.err)}</div><p><button class="ghost" data-act="reload">ลองใหม่</button></p>` : '<div class="empty">กำลังโหลด…</div>')) hoBind(el); if (!HO.err) hoLoad(true); return; }
+  if (!L) { if (hoPaint(el, HO.err ? `<div class="warnbox bad">${esc(HO.err)}</div><p><button class="ghost" data-act="reload">ลองใหม่</button></p>` : lbar('hoList', 'กำลังโหลดข้อมูลส่งมอบ'))) hoBind(el); if (!HO.err) hoLoad(true); return; }
   const st = L.stats || { today: 0, waiting: 0 }, ck = L.check;
   let html = hoTabs() + `<button class="primary ho-start" type="button" data-act="start">📷 เริ่มสแกน</button>
     <button class="ghost ho-start" type="button" data-act="sign" style="margin-top:8px">✍ ให้คนรถเซ็นรับ (ไม่บังคับ — เก็บเป็นหลักฐาน)</button>
@@ -2018,7 +2074,8 @@ function renderHoReport(el){
       <label class="field"><span>สถานะการขนส่ง</span><select data-f="status">${opts(HO_STATUS.slice(1), f.status, 'ทุกสถานะ')}</select></label>
     </div>
     <input type="search" data-f="q" placeholder="ค้นหาเลขพัสดุ / เลขออเดอร์" value="${esc(f.q)}"></div>`;
-  if (HO.repLoading && !R) html += '<div class="empty">กำลังโหลดรายงาน…</div>';
+  if (HO.repLoading && !R) html += lbar('hoReport', 'กำลังโหลดรายงาน');
+  if (HO.gap && HO.gap.loading) html += lbar('hoUnscanned', 'กำลังเทียบกับออเดอร์ใน JST');
   else if (R && R.err) html += `<div class="warnbox bad">${esc(R.err)}</div>`;
   else {
     html += `<div class="kpis ho-kpis5">
@@ -2430,7 +2487,7 @@ function hoCloseDlg(){
     <div class="field"><label>คนรถสแกนรับกล่องหน้าคลังแล้วหรือยัง?</label>
       <div class="seg" role="group" id="hoMode"><button type="button" data-m="scanned">สแกนรับแล้ว</button><button type="button" data-m="all">ไม่ได้สแกนรับ</button></div>
       <p class="hint" id="hoModeHint"></p>
-      <button type="button" class="ghost" id="hoRecheck" hidden>🔄 เช็ก JST อีกครั้ง</button></div>
+      <button type="button" class="ghost" id="hoRecheck" hidden>🔄 เช็ก JST อีกครั้ง</button><div id="hoRefBar"></div></div>
     <div class="ho-big"><span class="mono" id="hoN">0</span> กล่อง</div>
     <p class="hint" style="text-align:center" id="hoRest"></p>
     <p class="hint" style="text-align:center">ให้คนรถนับกล่องให้ตรงกับจำนวนนี้ก่อนเซ็น</p>
@@ -2453,10 +2510,12 @@ function hoCloseDlg(){
   // scanned = the driver scanned at the warehouse → JST updates → sign only parcels JST shows as picked up (several trucks, part of the boxes each)
   let mode = lsGet('tmws.hoMode.' + pick) || 'scanned', refreshing = false, refreshedAt = 0, picked = false;
   const live = () => HO.items.filter(p => p.state !== 'error' && p.state !== 'sending');
+  let asked = '';
   const refresh = async () => {
     if (refreshing) return; refreshing = true; update();
     try {
-      const r = await run('hoRefresh', S.pin, h.id);
+      asked = pick;
+      const r = await run('hoRefresh', S.pin, h.id, { carrier: pick }); // only this courier's boxes are checked with JST (was: every box in the round)
       if (r.handover && r.handover.id && r.handover.id !== h.id) { h.id = r.handover.id; HO.curRev = ''; } // round signed off by another phone meanwhile
       HO.items = r.parcels.filter(p => !p.void); refreshedAt = r.at || Date.now();
       // nobody chose yet: pre-select the courier JST shows as having picked up the most boxes
@@ -2467,6 +2526,8 @@ function hoCloseDlg(){
       }
     } catch (e) { q('#hoCloseErr').textContent = /unknown function/.test(e.message) ? 'เซิร์ฟเวอร์ยังไม่รองรับ — อัปเดต Code.gs' : errMsg(e); }
     refreshing = false; update();
+    // the courier changed while JST was being asked (picked by hand, or chosen automatically above): check that courier's boxes too
+    if (md.el.isConnected && mode === 'scanned' && pick !== asked) refresh();
   };
   const update = () => {
     const g = known.find(x => x.name === pick), withUnk = !q('#hoUnk') || q('#hoUnk').checked, k = carrierKey(pick) || pick.toLowerCase();
@@ -2477,6 +2538,7 @@ function hoCloseDlg(){
     if (q('#hoUnkRow')) q('#hoUnkRow').hidden = mode === 'scanned';
     q('#hoRecheck').hidden = mode !== 'scanned';
     q('#hoRecheck').disabled = refreshing;
+    if (!!q('#hoRefBar').firstChild !== refreshing) q('#hoRefBar').innerHTML = refreshing ? lbar('hoRefresh', 'กำลังเช็กกับ JST') : '';
     q('#hoRecheck').textContent = refreshing ? 'กำลังเช็กกับ JST…' : '🔄 เช็ก JST อีกครั้ง' + (refreshedAt ? ' (ล่าสุด ' + fmtTime(refreshedAt) + ')' : '');
     q('#hoModeHint').textContent = mode === 'scanned'
       ? `นับเฉพาะกล่องที่ JST ขึ้นว่า ${pick} รับแล้ว (${num(n)} จาก ${num(mineAll.length)} กล่อง) — ที่เหลือรอรถคันถัดไป`
@@ -2488,7 +2550,7 @@ function hoCloseDlg(){
     q('#hoDriver').value = q('#hoDriver').dataset.typed ? q('#hoDriver').value : lsGet('tmws.hoDriver.' + pick) || '';
     q('#hoPlate').value = q('#hoPlate').dataset.typed ? q('#hoPlate').value : lsGet('tmws.hoPlate.' + pick) || '';
   };
-  md.el.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { pick = b.dataset.c; picked = true; mode = lsGet('tmws.hoMode.' + pick) || mode; update(); });
+  md.el.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { pick = b.dataset.c; picked = true; mode = lsGet('tmws.hoMode.' + pick) || mode; update(); if (mode === 'scanned') refresh(); });
   md.el.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { mode = b.dataset.m; lsSet('tmws.hoMode.' + pick, mode); update(); if (mode === 'scanned') refresh(); });
   q('#hoRecheck').onclick = refresh;
   ['#hoDriver', '#hoPlate'].forEach(id => q(id).addEventListener('input', e => { e.target.dataset.typed = '1'; }));
@@ -2743,7 +2805,7 @@ async function startApp(init){
   if (!timersOn) {
     timersOn = true;
     // 16 พ.ย.: on the handover tab only the handover data is polled (stock-count data was also read every 8 s by every phone there)
-    setInterval(() => { if (S.me && document.visibilityState === 'visible') { if (S.view === 'ho') hoPoll(); else refresh(); } }, POLL_MS);
+    setInterval(() => { if (S.me && document.visibilityState === 'visible') { if (S.view === 'ho') hoPoll(); else { refresh(); if (S.view === 'count') loadSnap(false); } } }, POLL_MS);
     setInterval(() => { if (S.me && document.visibilityState === 'visible') loadProducts(); }, 3 * 60e3); // picks up rows added to the Products sheet
   }
 }
