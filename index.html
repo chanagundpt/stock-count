@@ -1937,18 +1937,22 @@ function hoJstPill(p, alertHours){
 async function hoLoad(force){
   if (HO.loading || (!force && Date.now() - HO.listAt < 20e3)) return;
   HO.loading = true;
-  try {
+  try { for (let t = 1; ; t++) { try {
     const r = await run('hoList', S.pin, HO.list && HO.list.rev || '');
     if (!(r && r.same)) HO.list = r;
     HO.err = ''; HO.listAt = Date.now();
     const ck = HO.list.check;
     if (!ck || Date.now() - ck.at > 15 * 60e3) hoTick();
+    break;
   }
   catch (e) {
     if (e.message === 'AUTH_REQUIRED') { authLost(); return; }
+    // 23 พ.ย.: one failed request showed "เชื่อมต่อไม่ได้" at once — now tried again by itself, the bar says so
+    if (RETRYABLE.test(e.message || '') && t < 4) { HO.retry = t + 1; HO.err = ''; renderHo(); await new Promise(res => setTimeout(res, 1500 * t)); continue; }
     HO.err = /unknown function/.test(e.message) ? 'เซิร์ฟเวอร์ยังไม่รองรับการส่งมอบ — ผู้ดูแลต้องอัปเดต Code.gs ใน Apps Script ก่อน' : errMsg(e);
-  }
-  finally { HO.loading = false; renderHo(); }
+    break;
+  } } }
+  finally { HO.loading = false; HO.retry = 0; renderHo(); }
 }
 // phones with the tab open start the JST check when the last one is over 15 minutes old (the trigger alone stopped on 2 Nov)
 async function hoTick(){
@@ -1971,7 +1975,7 @@ function renderHo(){
   if (HO.cur) return renderHoScan();
   const L = HO.list, el = $('#hoDash');
   if (HO.tab === 'report') return renderHoReport(el);
-  if (!L) { if (hoPaint(el, HO.err ? `<div class="warnbox bad">${esc(HO.err)}</div><p><button class="ghost" data-act="reload">ลองใหม่</button></p>` : lbar('hoList', 'กำลังโหลดข้อมูลส่งมอบ'))) hoBind(el); if (!HO.err) hoLoad(true); return; }
+  if (!L) { if (hoPaint(el, HO.err ? `<div class="warnbox bad">${esc(HO.err)}</div><p><button class="ghost" data-act="reload">ลองใหม่</button></p>` : lbar('hoList', HO.retry > 1 ? `เชื่อมต่อไม่ได้ กำลังลองใหม่ (ครั้งที่ ${HO.retry})` : 'กำลังโหลดข้อมูลส่งมอบ'))) hoBind(el); if (!HO.err) hoLoad(true); return; }
   const st = L.stats || { today: 0, waiting: 0 }, ck = L.check;
   let html = hoTabs() + `<button class="primary ho-start" type="button" data-act="start">📷 เริ่มสแกน</button>
     <button class="ghost ho-start" type="button" data-act="sign" style="margin-top:8px">✍ ให้คนรถเซ็นรับ (ไม่บังคับ — เก็บเป็นหลักฐาน)</button>
@@ -2775,6 +2779,34 @@ async function loadProducts(){
   if (!S.me) return;
   try { setProducts(await run('getProducts', S.pin)); render(); } catch (e) { if (e.message === 'AUTH_REQUIRED') authLost(); }
 }
+// 23 พ.ย.: a phone that keeps the app open (or added to the home screen) went on using an old copy of this page after an update.
+// The page now looks at the published copy every few minutes; a newer build → reload when nobody is in the middle of something,
+// otherwise a bar at the top to tap.
+const PAGE_BUILD = '2026-11-23.3';
+let newBuild = '';
+async function checkPageBuild(){
+  if (IN_GAS || location.protocol === 'file:') return;
+  try {
+    if (!newBuild) {
+      const txt = await (await fetch(location.pathname + '?_=' + Date.now(), { cache: 'no-store' })).text();
+      const m = txt.match(/const PAGE_BUILD = '([^']+)'/);
+      if (m && m[1] !== PAGE_BUILD) newBuild = m[1];
+    }
+    if (!newBuild) return;
+    const busy = HO.cur || document.querySelector('.modal') || !$('#scanner').hidden || S.sel || ($('#code') && $('#code').value) || HO.pumping;
+    if (!busy) { location.replace(location.pathname + '?v=' + encodeURIComponent(newBuild)); return; }
+    if (!$('#newBuildBar')) {
+      const b = document.createElement('button');
+      b.id = 'newBuildBar'; b.type = 'button'; b.textContent = '🔄 มีเวอร์ชันใหม่ — แตะเพื่ออัปเดต';
+      b.style.cssText = 'position:fixed;left:8px;right:8px;top:8px;z-index:9999;padding:10px 12px;border:0;border-radius:10px;background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:600';
+      b.onclick = () => location.replace(location.pathname + '?v=' + encodeURIComponent(newBuild));
+      document.body.append(b);
+    }
+  } catch {}
+}
+setInterval(checkPageBuild, 3 * 60e3);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkPageBuild(); });
+setTimeout(checkPageBuild, 4000);
 async function boot(){
   document.body.classList.add('locked');
   // already signed in on this phone → one call opens the app (no separate bootstrap / counts calls)
